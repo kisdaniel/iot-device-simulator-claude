@@ -330,19 +330,20 @@ Ha az eszközön a `discovery` be van kapcsolva, indításkor két megőrzött �
 ```json
 // tasmota/discovery/A8032ABE54DC/config (megőrzött)
 {
-  "ip": "192.0.2.10", "dn": "Bojler", "fn": ["Bojler", null, null, null, null, null, null, null],
+  "ip": "192.0.2.220", "dn": "Bojler", "fn": ["Bojler", null, null, null, null, null, null, null],
   "hn": "tasmota-BE54DC-5340", "mac": "A8032ABE54DC", "md": "Generic", "ty": 0, "if": 0,
   "ofln": "Offline", "onln": "Online", "state": ["OFF", "ON", "TOGGLE", "HOLD"],
   "sw": "14.4.1", "t": "tasmota_BE54DC", "ft": "%prefix%/%topic%/", "tp": ["cmnd", "stat", "tele"],
   "rl": [1, 0, 0, 0, 0, 0, 0, 0], "swc": [-1, -1, -1, -1, -1, -1, -1, -1],
   "swn": [null, null, null, null, null, null, null, null], "btn": [0, 0, 0, 0, 0, 0, 0, 0],
   "so": { "4": 0, "11": 0, "13": 0, "17": 0, "20": 0, "30": 0, "68": 0, "73": 0, "82": 0, "114": 0, "117": 0 },
-  "lk": 0, "lt_st": 0, "sho": [0, 0, 0, 0], "ver": 1
+  "lk": 0, "lt_st": 0, "sho": [0, 0, 0, 0],
+  "sht": [[0, 0, 0], [0, 0, 0], [0, 0, 0], [0, 0, 0]], "ver": 1
 }
 ```
 
-- **Kitöltés.** `dn` és `fn[0]` az eszköz neve, `t`, `ft`, `tp` a topicbeállítás, `rl` első `relayCount` eleme 1 (relé), a többi 0. Az `ip`, `hn`, `md`, `sw` rögzített, kitalált érték.
-- **Mikor megy ki.** Eszköz indításakor, valamint név, topic, relészám vagy szenzorszám változásakor.
+- **Kitöltés.** `dn` az eszköz neve, `fn` relénként a név (a második relétől „név 2”, „név 3” …), a többi `null`; `t`, `ft`, `tp` a topicbeállítás, `rl` első `relayCount` eleme 1 (relé), a többi 0. A `hn` a Tasmota alapértelmezett hosztneve (`tasmota-<MAC utolsó 6 jegye>-<a MAC utolsó két bájtja & 0x1FFF>`), az `ip` a 192.0.2.0/24 dokumentációs tartományból a MAC utolsó bájtja szerint; az `md` és a `sw` rögzített.
+- **Mikor megy ki.** Eszköz indításakor (a `LWT` után), a discovery bekapcsolásakor és átnevezéskor; topic, relészám, mérő vagy szenzorszám változásakor az eszköz újraindul, és az indulás küldi ki az új szerkezetet. A beállítás lekapcsolt eszközön is frissíthető, mert a közös kapcsolat él.
 - **Törlés.** A `discovery` kikapcsolásakor és az eszköz törlésekor mindkét topicra üres, megőrzött üzenet megy ki, ami eltávolítja az eszközt a vezérlőből. Lekapcsoláskor (F-14) a felfedezési üzenet megmarad, csak az `LWT` vált `Offline` értékre.
 - **Feltétel.** A `fullTopic` tartalmazza a `%prefix%` és a `%topic%` jelölőt is; enélkül az API nem engedi bekapcsolni a discoveryt.
 
