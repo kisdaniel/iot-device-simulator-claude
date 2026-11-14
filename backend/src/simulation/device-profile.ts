@@ -3,6 +3,7 @@ import type {
   DeviceType,
   MeterState,
   SwitchState,
+  TemperatureState,
 } from '@iot-sim/shared';
 import type { PublishOptions } from '../mqtt/mqtt-gateway.service.js';
 
@@ -21,6 +22,9 @@ export type MeterPatch = Partial<
     | 'energyTotalWh'
   >
 >;
+
+/** A hőmérő állítható mezői. */
+export type SensorPatch = Partial<Pick<TemperatureState, 'tC' | 'error'>>;
 
 /** Amit egy profil az eszközéről lát és amivel a külvilág felé hat. */
 export interface ProfileContext {
@@ -68,6 +72,12 @@ export interface DeviceProfile {
   ): void;
   /** A kapcsoló mérője megváltozott (terhelés, feszültség, számláló); `before` a korábbi állapot. */
   onMeterChanged(ctx: ProfileContext, index: number, before: SwitchState): void;
+  /** Egy hőmérő értéke vagy hibaállapota megváltozott; `before` a korábbi állapot. */
+  onSensorChanged(
+    ctx: ProfileContext,
+    index: number,
+    before: TemperatureState,
+  ): void;
   /** Másodpercenként egyszer, a közös óráról; a profil dönti el, mi esedékes. */
   onTick(ctx: ProfileContext, now: Date): void;
 }

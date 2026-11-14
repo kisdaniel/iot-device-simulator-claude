@@ -11,6 +11,7 @@ import type {
   DeviceProfile,
   MeterPatch,
   ProfileContext,
+  SensorPatch,
 } from './device-profile.js';
 import { commitEnergy as commitMeterEnergy } from './meter.js';
 
@@ -154,6 +155,21 @@ export class SimulatedDevice {
     state.meter.energyYesterdayWh = 0;
     this.changed(index, before, 'onMeterChanged');
     return before.meter!.energyTotalWh;
+  }
+
+  /** Hőmérő értéke vagy hibaállapota; lekapcsolt eszközön is állítható. */
+  setSensor(index: number, patch: SensorPatch): void {
+    const state = this.device.sensors.find((s) => s.index === index);
+    if (!state) throw new RangeError(`Nincs ${index}. hőmérő az eszközön.`);
+    const before = structuredClone(state);
+    Object.assign(state, patch);
+    const profile = this.profile;
+    if (this.online && profile) {
+      this.guard('onSensorChanged', () =>
+        profile.onSensorChanged(this.ctx, index, before),
+      );
+    }
+    this.options.onStateChange(this);
   }
 
   /** Rögzíti az összes számlálót a megadott pillanatig (mentés előtt). */
