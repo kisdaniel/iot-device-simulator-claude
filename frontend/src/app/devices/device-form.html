@@ -134,6 +134,50 @@
                     >Vezérlés szöveges paranccsal (<code>command/…</code>)</label
                   >
                 </div>
+              </div>
+
+              <div class="col-12">
+                <span class="form-label d-block">Shelly Add-on</span>
+                <div class="d-flex flex-wrap align-items-center gap-3">
+                  <div class="form-check form-switch mb-0">
+                    <input
+                      id="addonEnabled"
+                      class="form-check-input"
+                      type="checkbox"
+                      role="switch"
+                      formControlName="addonEnabled"
+                    />
+                    <label for="addonEnabled" class="form-check-label">DS18B20 hőmérők</label>
+                  </div>
+                  @if (form.controls.addonEnabled.value) {
+                    <div class="d-flex align-items-center gap-2">
+                      <label for="sensorCount" class="form-label mb-0 small">Darab</label>
+                      <select
+                        id="sensorCount"
+                        class="form-select form-select-sm"
+                        style="width: 5rem"
+                        formControlName="sensorCount"
+                      >
+                        @for (n of sensorCounts; track n) {
+                          <option [ngValue]="n">{{ n }}</option>
+                        }
+                      </select>
+                    </div>
+                  }
+                </div>
+                <div class="form-text">
+                  A hőmérők <code>temperature:100</code>-tól számozódnak. A meglévő hőmérők értéke
+                  és címe átméretezéskor megmarad.
+                </div>
+                @if (editing() && addonChanged()) {
+                  <div class="alert alert-info small py-2 mt-2 mb-0" role="status">
+                    Mentéskor az eszköz újraindul (ki- és bejelentkezik), mint a valódi a perifériák
+                    átállítása után.
+                  </div>
+                }
+              </div>
+
+              <div class="col-12">
                 @if (!editing()) {
                   <div class="form-check form-switch">
                     <input

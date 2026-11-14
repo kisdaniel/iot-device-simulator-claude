@@ -6,6 +6,7 @@ import type {
   CreateDeviceRequest,
   DeviceView,
   MqttLogEntry,
+  SetSensorRequest,
   UpdateDeviceRequest,
 } from '@iot-sim/shared';
 import { Observable } from 'rxjs';
@@ -62,6 +63,10 @@ export class Api {
 
   setMeter(id: string, index: number, patch: MeterInput): Observable<DeviceView> {
     return this.http.put<DeviceView>(`/api/devices/${id}/switches/${index}/meter`, patch);
+  }
+
+  setSensor(id: string, index: number, body: SetSensorRequest): Observable<DeviceView> {
+    return this.http.put<DeviceView>(`/api/devices/${id}/sensors/${index}`, body);
   }
 
   resetEnergy(id: string, index: number): Observable<DeviceView> {

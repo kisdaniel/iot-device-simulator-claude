@@ -36,4 +36,18 @@ describe('device-labels', () => {
     // Kikapcsolt állapotüzenetek: nincs status topic.
     expect(topics.some((t) => t.includes('/status/'))).toBe(false);
   });
+
+  it('az Add-on hőmérőinek állapottopicja temperature:100-tól számoz', () => {
+    const device: Device = {
+      ...base,
+      shelly: { ...base.shelly!, statusNtf: true },
+      sensors: [
+        { index: 0, address: '28FF64061FC795B1', tC: 21.5, error: null },
+        { index: 1, address: '28FF64061FC795B2', tC: 30, error: null },
+      ],
+    };
+    const topics = shellyTopics(device).map((t) => t.topic);
+    expect(topics).toContain('otthon/nappali/status/temperature:100');
+    expect(topics).toContain('otthon/nappali/status/temperature:101');
+  });
 });

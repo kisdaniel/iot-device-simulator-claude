@@ -3,6 +3,7 @@ import { toSignal } from '@angular/core/rxjs-interop';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 import {
+  SHELLY_ADDON_MAX_SENSORS,
   SHELLY_GENERATIONS,
   SHELLY_MODELS,
   SHELLY_SWITCH_COUNT,
@@ -38,6 +39,19 @@ export class DeviceForm {
   readonly id = input<string>();
 
   protected readonly generations = SHELLY_GENERATIONS;
+  protected readonly sensorCounts = Array.from(
+    { length: SHELLY_ADDON_MAX_SENSORS },
+    (_, i) => i + 1,
+  );
+  /** Szerkesztéskor jelezzük, ha az Add-on változása újraindítja az eszközt. */
+  protected readonly addonChanged = computed(() => {
+    const device = this.device();
+    const value = this.value();
+    if (!device?.shelly) return false;
+    const enabled = value.addonEnabled ?? false;
+    const count = enabled ? Number(value.sensorCount) : 0;
+    return enabled !== device.shelly.addon.enabled || count !== device.shelly.addon.sensorCount;
+  });
   protected readonly models = SHELLY_MODELS;
 
   protected readonly form = this.fb.nonNullable.group({
@@ -50,6 +64,8 @@ export class DeviceForm {
     statusNtf: [true],
     enableControl: [true],
     enabled: [true],
+    addonEnabled: [false],
+    sensorCount: [1],
   });
 
   private readonly value = toSignal(this.form.valueChanges, {
@@ -87,14 +103,22 @@ export class DeviceForm {
         rpcNtf: value.rpcNtf!,
         statusNtf: value.statusNtf!,
         enableControl: value.enableControl!,
-        addon: { enabled: false, sensorCount: 0 },
+        addon: {
+          enabled: value.addonEnabled!,
+          sensorCount: value.addonEnabled ? value.sensorCount! : 0,
+        },
       },
       switches: Array.from({ length: SHELLY_SWITCH_COUNT[value.type!] }, (_, index) => ({
         index,
         output: false,
         source: 'init',
       })),
-      sensors: [],
+      sensors: Array.from({ length: value.addonEnabled ? value.sensorCount! : 0 }, (_, index) => ({
+        index,
+        address: '',
+        tC: null,
+        error: null,
+      })),
     });
     return { deviceId, topics };
   });
@@ -116,6 +140,8 @@ export class DeviceForm {
         rpcNtf: device.shelly.rpcNtf,
         statusNtf: device.shelly.statusNtf,
         enableControl: device.shelly.enableControl,
+        addonEnabled: device.shelly.addon.enabled,
+        sensorCount: device.shelly.addon.enabled ? device.shelly.addon.sensorCount : 1,
         enabled: device.enabled,
       });
       // Az azonosítót meghatározó mezők felvétel után nem változhatnak.
@@ -136,7 +162,16 @@ export class DeviceForm {
     }
     const v = this.form.getRawValue();
     const topicPrefix = v.topicPrefix.trim() || null;
-    const flags = { rpcNtf: v.rpcNtf, statusNtf: v.statusNtf, enableControl: v.enableControl };
+    const addon = {
+      enabled: v.addonEnabled,
+      sensorCount: v.addonEnabled ? Number(v.sensorCount) : 0,
+    };
+    const flags = {
+      rpcNtf: v.rpcNtf,
+      statusNtf: v.statusNtf,
+      enableControl: v.enableControl,
+      addon,
+    };
     const id = this.id();
     const request = id
       ? this.api.updateDevice(id, { name: v.name.trim(), shelly: { topicPrefix, ...flags } })
