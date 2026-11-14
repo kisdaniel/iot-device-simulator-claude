@@ -9,6 +9,7 @@ import { SettingEntity } from './entities/setting.entity.js';
 import { SwitchEntity } from './entities/switch.entity.js';
 import { TemperatureSensorEntity } from './entities/temperature-sensor.entity.js';
 import { InitialSchema1794650000000 } from './migrations/1794650000000-initial-schema.js';
+import { DeviceStore } from './device.store.js';
 import { SettingsStore } from './settings.store.js';
 
 export const ENTITIES = [
@@ -44,7 +45,7 @@ export function databasePath(dataDir: string): string {
     }),
     TypeOrmModule.forFeature(ENTITIES),
   ],
-  providers: [SettingsStore],
-  exports: [TypeOrmModule, SettingsStore],
+  providers: [SettingsStore, DeviceStore],
+  exports: [TypeOrmModule, SettingsStore, DeviceStore],
 })
 export class StorageModule {}
