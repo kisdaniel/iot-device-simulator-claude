@@ -4,7 +4,91 @@
  */
 
 export type DeviceType = 'shelly-1pm' | 'shelly-2pm' | 'tasmota';
+export type ShellyDeviceType = Exclude<DeviceType, 'tasmota'>;
 export type ShellyGeneration = 2 | 3 | 4;
+
+export const SHELLY_DEVICE_TYPES: readonly ShellyDeviceType[] = [
+  'shelly-1pm',
+  'shelly-2pm',
+];
+export const SHELLY_GENERATIONS: readonly ShellyGeneration[] = [2, 3, 4];
+
+/** A Shelly típusok kapcsolóinak száma. */
+export const SHELLY_SWITCH_COUNT: Record<ShellyDeviceType, number> = {
+  'shelly-1pm': 1,
+  'shelly-2pm': 2,
+};
+
+export interface ShellyModelInfo {
+  /** Az eszközazonosító eleje, a kötőjel és a MAC előtt */
+  idPrefix: string;
+  /** A Shelly.GetDeviceInfo `model` mezője */
+  model: string;
+  /** A Shelly.GetDeviceInfo `app` mezője */
+  app: string;
+  /** Megjelenített terméknév */
+  name: string;
+}
+
+/**
+ * Azonosítók és modellkódok generációnként. Az 1PM Gen3 és a 2PM Gen4 gyártói
+ * forrásból származik; a többi sor a névmintából következtetett, valós eszközzel
+ * ellenőrizendő (lásd docs/technikai-specifikacio.md, „Azonosítók”).
+ */
+export const SHELLY_MODELS: Record<
+  ShellyDeviceType,
+  Record<ShellyGeneration, ShellyModelInfo>
+> = {
+  'shelly-1pm': {
+    2: {
+      idPrefix: 'shellyplus1pm',
+      model: 'SNSW-001P16EU',
+      app: 'Plus1PM',
+      name: 'Shelly Plus 1PM',
+    },
+    3: {
+      idPrefix: 'shelly1pmg3',
+      model: 'S3SW-001P16EU',
+      app: 'S1PMG3',
+      name: 'Shelly 1PM Gen3',
+    },
+    4: {
+      idPrefix: 'shelly1pmg4',
+      model: 'S4SW-001P16EU',
+      app: 'S1PMG4',
+      name: 'Shelly 1PM Gen4',
+    },
+  },
+  'shelly-2pm': {
+    2: {
+      idPrefix: 'shellyplus2pm',
+      model: 'SNSW-102P16EU',
+      app: 'Plus2PM',
+      name: 'Shelly Plus 2PM',
+    },
+    3: {
+      idPrefix: 'shelly2pmg3',
+      model: 'S3SW-002P16EU',
+      app: 'S2PMG3',
+      name: 'Shelly 2PM Gen3',
+    },
+    4: {
+      idPrefix: 'shelly2pmg4',
+      model: 'S4SW-002P16EU',
+      app: 'S2PMG4',
+      name: 'Shelly 2PM Gen4',
+    },
+  },
+};
+
+/** Shelly eszközazonosító, pl. shelly1pmg3-a8032abe54dc. */
+export function shellyDeviceId(
+  type: ShellyDeviceType,
+  generation: ShellyGeneration,
+  mac: string,
+): string {
+  return `${SHELLY_MODELS[type][generation].idPrefix}-${mac.toLowerCase()}`;
+}
 
 export interface ShellyConfig {
   generation: ShellyGeneration;
@@ -16,6 +100,13 @@ export interface ShellyConfig {
   statusNtf: boolean;
   enableControl: boolean;
   addon: { enabled: boolean; sensorCount: number };
+}
+
+/** A ténylegesen használt topic-előtag: a megadott előtag, vagy ha nincs, az eszközazonosító. */
+export function shellyTopicPrefix(
+  config: Pick<ShellyConfig, 'topicPrefix' | 'deviceId'>,
+): string {
+  return config.topicPrefix || config.deviceId;
 }
 
 export interface TasmotaConfig {
@@ -70,6 +161,41 @@ export interface Device {
   tasmota?: TasmotaConfig;
   switches: SwitchState[];
   sensors: TemperatureState[];
+}
+
+export type DeviceRunStatus = 'online' | 'offline';
+
+/** Egy eszköz, ahogy az API kiadja: a tárolt adatok és a futási állapot. */
+export interface DeviceView extends Device {
+  status: DeviceRunStatus;
+}
+
+/** POST /api/devices törzse (egyelőre Shelly eszközökhöz). */
+export interface CreateDeviceRequest {
+  name: string;
+  type: ShellyDeviceType;
+  enabled?: boolean;
+  shelly: {
+    generation: ShellyGeneration;
+    /** 12 hexadecimális jegy; elhagyva véletlenszerű */
+    mac?: string;
+    topicPrefix?: string | null;
+    rpcNtf?: boolean;
+    statusNtf?: boolean;
+    enableControl?: boolean;
+  };
+}
+
+/** PATCH /api/devices/:id törzse; az elhagyott mezők nem változnak. */
+export interface UpdateDeviceRequest {
+  name?: string;
+  shelly?: {
+    /** null vagy üres: az eszközazonosító lesz az előtag */
+    topicPrefix?: string | null;
+    rpcNtf?: boolean;
+    statusNtf?: boolean;
+    enableControl?: boolean;
+  };
 }
 
 /** A brokerbeállítás, ahogy az adatbázisban és a környezetben él (jelszóval). */
@@ -133,11 +259,9 @@ export interface MqttLogEntry {
   retain: boolean;
 }
 
-export type DeviceRunStatus = 'online' | 'offline';
-
 /** A GET /api/events (SSE) eseményei: az esemény neve a `type`, a törzse a `data`. */
 export type SimEvent =
-  | { type: 'device.updated'; data: Device }
+  | { type: 'device.updated'; data: DeviceView }
   | { type: 'device.removed'; data: { id: string } }
   | { type: 'device.connection'; data: { id: string; status: DeviceRunStatus } }
   | { type: 'broker.status'; data: BrokerConnection }
