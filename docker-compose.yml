@@ -27,8 +27,13 @@ services:
       # A brokerbeállítás környezetből jön, ezért a felületen csak olvasható.
       MQTT_URL: mqtt://mosquitto:1883
       LOG_LEVEL: info
+      # Példa eszközök az első induláskor (seed: csak üres adatbázisba tölt).
+      # A config/devices.json helyett a felületről exportált fájl is megadható.
+      # CONFIG_FILE: /config/devices.json
+      # CONFIG_IMPORT_MODE: seed
     volumes:
       - simulator-data:/data
+      # - ./config:/config:ro
 
 volumes:
   mosquitto-data:

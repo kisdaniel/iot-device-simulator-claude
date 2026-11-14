@@ -1,0 +1,39 @@
+{
+  "version": 1,
+  "devices": [
+    {
+      "name": "Bojler",
+      "type": "shelly-1pm",
+      "shelly": {
+        "generation": 3,
+        "deviceId": "shelly1pmg3-a8032abe54dc",
+        "addon": { "enabled": true, "sensorCount": 1 }
+      },
+      "switches": [{ "index": 0, "output": false, "meter": { "loadPower": 1800, "voltage": 230 } }],
+      "sensors": [{ "index": 0, "tC": 48.5 }]
+    },
+    {
+      "name": "Nappali",
+      "type": "shelly-2pm",
+      "shelly": { "generation": 4, "deviceId": "shelly2pmg4-a8032abe54dd" },
+      "switches": [
+        { "index": 0, "meter": { "loadPower": 60 } },
+        { "index": 1, "meter": { "loadPower": 120 } }
+      ]
+    },
+    {
+      "name": "Mosógép",
+      "type": "tasmota",
+      "tasmota": {
+        "mac": "A8032ABE54DE",
+        "topic": "tasmota_BE54DE",
+        "relayCount": 1,
+        "hasEnergy": true,
+        "sensorCount": 1,
+        "discovery": false
+      },
+      "switches": [{ "index": 0, "meter": { "loadPower": 2100 } }],
+      "sensors": [{ "index": 0, "tC": 40 }]
+    }
+  ]
+}
