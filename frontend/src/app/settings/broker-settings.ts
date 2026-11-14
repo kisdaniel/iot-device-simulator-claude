@@ -2,6 +2,7 @@ import { Component, OnInit, inject, signal } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import type { BrokerSettingsView, BrokerTestResult } from '@iot-sim/shared';
 import { Api, BrokerSettingsInput, errorMessage } from '../core/api';
+import { BrokerStatus } from '../core/broker-status';
 
 @Component({
   selector: 'app-broker-settings',
@@ -11,6 +12,7 @@ import { Api, BrokerSettingsInput, errorMessage } from '../core/api';
 export class BrokerSettings implements OnInit {
   private readonly api = inject(Api);
   private readonly fb = inject(FormBuilder);
+  protected readonly status = inject(BrokerStatus);
 
   protected readonly form = this.fb.nonNullable.group({
     host: ['', [Validators.required, Validators.pattern(/^[^\s/:@]+$/)]],
