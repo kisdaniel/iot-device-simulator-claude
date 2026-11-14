@@ -1,0 +1,30 @@
+{
+  "name": "iot-device-simulator",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Shelly és Tasmota IoT eszközök szimulátora MQTT-n keresztül",
+  "license": "UNLICENSED",
+  "workspaces": [
+    "shared",
+    "backend",
+    "frontend"
+  ],
+  "scripts": {
+    "build": "npm run build -w shared && npm run build -w backend && npm run build -w frontend",
+    "test": "npm run test -w backend && npm run test -w frontend -- --watch=false",
+    "lint": "npm run lint -w backend",
+    "start:backend": "npm run start:dev -w backend",
+    "start:frontend": "npm start -w frontend",
+    "prepare": "husky || true",
+    "test:e2e": "npm run test:e2e -w backend"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "devDependencies": {
+    "@commitlint/cli": "^21.2.4",
+    "@commitlint/config-conventional": "^21.2.4",
+    "husky": "^9.1.7"
+  },
+  "type": "module"
+}
