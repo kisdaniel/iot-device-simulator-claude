@@ -1,0 +1,31 @@
+<h1 class="h3 mb-4">Eszközök</h1>
+
+@if (loading()) {
+  <div class="text-secondary" role="status">Betöltés…</div>
+} @else if (error(); as message) {
+  <div class="alert alert-danger" role="alert">{{ message }}</div>
+} @else if (devices().length === 0) {
+  <div class="card">
+    <div class="card-body text-center py-5">
+      <i class="bi bi-plug fs-1 text-secondary" aria-hidden="true"></i>
+      <p class="h5 mt-3">Még nincs szimulált eszköz</p>
+      <p class="text-secondary mb-0">
+        Az eszközök felvétele a következő fejlesztési lépésben érkezik.
+      </p>
+    </div>
+  </div>
+} @else {
+  <div class="row row-cols-1 row-cols-md-2 row-cols-xl-3 g-3">
+    @for (device of devices(); track device.id) {
+      <div class="col">
+        <div class="card h-100">
+          <div class="card-body">
+            <h2 class="h5 card-title">{{ device.name }}</h2>
+            <p class="card-subtitle text-secondary mb-2">{{ typeLabel(device) }}</p>
+            <code>{{ identity(device) }}</code>
+          </div>
+        </div>
+      </div>
+    }
+  </div>
+}
