@@ -1,0 +1,103 @@
+<h1 class="h3 mb-4">Beállítások</h1>
+
+<div class="card" style="max-width: 40rem">
+  <div class="card-header">MQTT broker</div>
+  <div class="card-body">
+    @if (view()?.managedByEnv) {
+      <div class="alert alert-info" role="status">
+        A brokerbeállítás környezeti változóból (<code>MQTT_URL</code>) jön, ezért itt csak
+        olvasható.
+      </div>
+    }
+
+    <form [formGroup]="form" (ngSubmit)="save()" novalidate>
+      <div class="row g-3">
+        <div class="col-sm-8">
+          <label for="host" class="form-label">Hoszt</label>
+          <input
+            id="host"
+            type="text"
+            class="form-control"
+            formControlName="host"
+            [class.is-invalid]="form.controls.host.touched && form.controls.host.invalid"
+          />
+          <div class="invalid-feedback">Csak a hosztnév vagy IP-cím kell, séma és port nélkül.</div>
+        </div>
+        <div class="col-sm-4">
+          <label for="port" class="form-label">Port</label>
+          <input
+            id="port"
+            type="number"
+            class="form-control"
+            formControlName="port"
+            [class.is-invalid]="form.controls.port.touched && form.controls.port.invalid"
+          />
+          <div class="invalid-feedback">1 és 65535 közötti szám.</div>
+        </div>
+        <div class="col-sm-6">
+          <label for="username" class="form-label">Felhasználónév</label>
+          <input
+            id="username"
+            type="text"
+            class="form-control"
+            formControlName="username"
+            autocomplete="off"
+          />
+        </div>
+        <div class="col-sm-6">
+          <label for="password" class="form-label">Jelszó</label>
+          <input
+            id="password"
+            type="password"
+            class="form-control"
+            formControlName="password"
+            autocomplete="new-password"
+            [placeholder]="view()?.hasPassword ? 'Mentve – üresen hagyva megmarad' : ''"
+          />
+        </div>
+        <div class="col-12">
+          <div class="form-check form-switch">
+            <input
+              id="tls"
+              type="checkbox"
+              role="switch"
+              class="form-check-input"
+              formControlName="tls"
+            />
+            <label for="tls" class="form-check-label">TLS (mqtts)</label>
+          </div>
+        </div>
+      </div>
+
+      @if (error(); as message) {
+        <div class="alert alert-danger mt-3 mb-0" role="alert">{{ message }}</div>
+      }
+      @if (saved()) {
+        <div class="alert alert-success mt-3 mb-0" role="status">A beállítás elmentve.</div>
+      }
+      @if (testResult(); as result) {
+        @if (result.ok) {
+          <div class="alert alert-success mt-3 mb-0" role="status">A broker elérhető.</div>
+        } @else {
+          <div class="alert alert-warning mt-3 mb-0" role="alert">
+            A kapcsolat nem sikerült: {{ result.error }}
+          </div>
+        }
+      }
+
+      <div class="d-flex gap-2 mt-4">
+        <button type="submit" class="btn btn-primary" [disabled]="busy() || view()?.managedByEnv">
+          Mentés
+        </button>
+        <button
+          type="button"
+          class="btn btn-outline-secondary"
+          [disabled]="busy()"
+          (click)="test()"
+        >
+          Kapcsolat tesztelése
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
