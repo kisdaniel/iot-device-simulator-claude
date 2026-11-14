@@ -21,6 +21,8 @@ export class DeviceStore {
     private readonly devices: Repository<DeviceEntity>,
     @InjectRepository(SwitchEntity)
     private readonly switches: Repository<SwitchEntity>,
+    @InjectRepository(TemperatureSensorEntity)
+    private readonly sensors: Repository<TemperatureSensorEntity>,
   ) {}
 
   async list(): Promise<Device[]> {
@@ -64,11 +66,34 @@ export class DeviceStore {
     );
   }
 
-  /** A kapcsolók pillanatnyi állapota (kimenet, forrás, mérő). */
-  async saveSwitches(device: Device): Promise<void> {
+  /** A kapcsolók és a hőmérők pillanatnyi állapota (kimenet, mérő, hőmérséklet). */
+  async saveState(device: Device): Promise<void> {
     await this.switches.save(
       device.switches.map((s) => toSwitchEntity(device.id, s)),
     );
+    if (device.sensors.length > 0) {
+      await this.sensors.save(
+        device.sensors.map((s) => toSensorEntity(device.id, s)),
+      );
+    }
+  }
+
+  /** Az eszköz sorai és a hőmérők teljes cseréje (pl. az Add-on átállítása után). */
+  async updateWithSensors(device: Device): Promise<void> {
+    await this.dataSource.transaction(async (manager) => {
+      await manager.update(
+        DeviceEntity,
+        { id: device.id },
+        { ...deviceColumns(device), updatedAt: new Date().toISOString() },
+      );
+      await manager.delete(TemperatureSensorEntity, { deviceId: device.id });
+      if (device.sensors.length > 0) {
+        await manager.insert(
+          TemperatureSensorEntity,
+          device.sensors.map((s) => toSensorEntity(device.id, s)),
+        );
+      }
+    });
   }
 
   /** Törlés; a kapcsolók és a szenzorok a külső kulcs miatt vele együtt törlődnek. */

@@ -12,7 +12,11 @@ import type { AppConfig } from '../config/env.js';
 import { EventBus } from '../events/event-bus.service.js';
 import { MqttGateway } from '../mqtt/mqtt-gateway.service.js';
 import { DeviceStore } from '../storage/device.store.js';
-import type { ChangeSource, MeterPatch } from './device-profile.js';
+import type {
+  ChangeSource,
+  MeterPatch,
+  SensorPatch,
+} from './device-profile.js';
 import { ProfileRegistry } from './profile-registry.js';
 import { SimulatedDevice } from './simulated-device.js';
 
@@ -125,6 +129,9 @@ export class SimulationService
       !current ||
       !profile ||
       current.device.enabled !== device.enabled ||
+      // A perifériák (Add-on) átállítása után a valós eszköz is újraindul.
+      JSON.stringify(current.device.sensors) !==
+        JSON.stringify(device.sensors) ||
       JSON.stringify(profile.subscriptions(current.device)) !==
         JSON.stringify(profile.subscriptions(device))
     ) {
@@ -161,6 +168,12 @@ export class SimulationService
   setMeter(id: string, index: number, patch: MeterPatch): DeviceView {
     const device = this.require(id);
     device.setMeter(index, patch);
+    return this.view(device);
+  }
+
+  setSensor(id: string, index: number, patch: SensorPatch): DeviceView {
+    const device = this.require(id);
+    device.setSensor(index, patch);
     return this.view(device);
   }
 
@@ -218,7 +231,7 @@ export class SimulationService
   private save(device: SimulatedDevice): void {
     const snapshot = structuredClone(device.device);
     this.writes = this.writes
-      .then(() => this.store.saveSwitches(snapshot))
+      .then(() => this.store.saveState(snapshot))
       .catch((err: Error) => {
         this.logger.error(
           `Az állapot mentése nem sikerült (${snapshot.id}): ${err.message}`,
