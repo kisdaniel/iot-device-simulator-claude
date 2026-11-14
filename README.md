@@ -2,7 +2,7 @@
 
 Shelly (1PM, 2PM, Add-on; Gen2, Gen3, Gen4) és Tasmota eszközök szimulációja MQTT-n keresztül, webes kezelőfelülettel. A szimulált eszközök ugyanazokat az üzeneteket küldik és fogadják, mint a valódiak, így a rájuk épülő rendszerek hardver nélkül tesztelhetők.
 
-> **Állapot:** Shelly 1PM és 2PM (Gen2, Gen3, Gen4) eszköz felvehető, MQTT-ről (RPC, `command` topicok) vagy a felületről kapcsolható, és a fogyasztásmérője a felületről állítható (terhelés, feszültség, áram, számláló). Az Add-on hőmérői és a Tasmota a következő lépésekben érkeznek; a sorrendet a [technikai specifikáció](docs/technikai-specifikacio.md) „Megvalósítási lépések” szakasza írja le.
+> **Állapot:** Shelly 1PM és 2PM (Gen2, Gen3, Gen4) eszköz felvehető, MQTT-ről (RPC, `command` topicok) vagy a felületről kapcsolható, a fogyasztásmérője a felületről állítható, és opcionális Add-onnal 1–5 DS18B20 hőmérőt kaphat. A Tasmota a következő lépésben érkezik; a sorrendet a [technikai specifikáció](docs/technikai-specifikacio.md) „Megvalósítási lépések” szakasza írja le.
 
 ## Dokumentáció
 
