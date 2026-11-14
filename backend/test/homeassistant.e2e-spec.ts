@@ -58,11 +58,12 @@ describe('Home Assistant konfiguráció (e2e)', () => {
     expect(all.body).toMatchObject({ deviceCount: 2, entityCount: 7 });
     expect(all.body.warnings).toEqual([expect.stringContaining('Felfedezett')]);
     const doc = parse(all.body.yaml, { version: '1.1' });
-    expect(doc.mqtt.switch.map((s: { name: string }) => s.name)).toEqual([
-      'Bojler',
-      'Mosógép 1',
-      'Mosógép 2',
-    ]);
+    expect(
+      doc.mqtt.switch.map((s: { device: { name: string } }) => s.device.name),
+    ).toEqual(['Bojler', 'Mosógép', 'Mosógép']);
+    expect(doc.mqtt.switch.map((s: { name: string | null }) => s.name)).toEqual(
+      [null, 'Relé 1', 'Relé 2'],
+    );
 
     const withDiscovered = await request(server)
       .get('/api/homeassistant/config?includeDiscovered=true')

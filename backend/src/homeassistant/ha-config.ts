@@ -34,11 +34,23 @@ function slug(value: string): string {
     .replace(/^_|_$/g, '');
 }
 
-/** A kapcsoló felirata: egy kimenetnél az eszköz neve, többnél sorszámmal. */
-function switchName(device: Device, index: number): string {
-  return device.switches.length > 1
-    ? `${device.name} ${index + 1}`
-    : device.name;
+/**
+ * A kimenet neve az eszközön belül. A Home Assistant az eszköz nevét eléteszi, ezért egy
+ * kimenetnél null (az entitás csak az eszköz nevét kapja), többnél „Kimenet 1”, „Relé 2”.
+ */
+function outputName(
+  device: Device,
+  index: number,
+  kind: 'Kimenet' | 'Relé',
+): string | null {
+  return device.switches.length > 1 ? `${kind} ${index + 1}` : null;
+}
+
+/** A mért érték neve az eszközön belül: „Teljesítmény”, vagy „Kimenet 2 teljesítmény”. */
+function measurementName(output: string | null, label: string): string {
+  return output
+    ? `${output} ${label}`
+    : label.charAt(0).toUpperCase() + label.slice(1);
 }
 
 interface SensorSpec {
@@ -164,8 +176,9 @@ function addShelly(
           payload_on: rpcSet(state.index, true),
           payload_off: rpcSet(state.index, false),
         };
+    const output = outputName(device, state.index, 'Kimenet');
     entities.switch.push({
-      name: switchName(device, state.index),
+      name: output,
       unique_id: `${UNIQUE_PREFIX}_${id}_switch_${state.index}`,
       ...command,
       ...(source
@@ -202,7 +215,7 @@ function addShelly(
       if (!sensorSource) continue;
       entities.sensor.push(
         sensor(
-          `${switchName(device, state.index)} ${spec.label}`,
+          measurementName(output, spec.label),
           `${UNIQUE_PREFIX}_${id}_${spec.key}_${state.index}`,
           sensorSource.state_topic,
           guarded(sensorSource.json, sensorSource.json),
@@ -220,7 +233,7 @@ function addShelly(
     if (!source) continue;
     entities.sensor.push(
       sensor(
-        `${device.name} hőmérő ${state.index + 1}`,
+        `Hőmérő ${state.index + 1}`,
         `${UNIQUE_PREFIX}_${id}_temperature_${state.index}`,
         source.state_topic,
         guarded(source.json, source.json),
@@ -250,8 +263,9 @@ function addTasmota(device: Device, entities: Entities): void {
 
   for (const state of device.switches) {
     const key = tasmotaPowerKey(device.switches.length, state.index);
+    const output = outputName(device, state.index, 'Relé');
     entities.switch.push({
-      name: switchName(device, state.index),
+      name: output,
       unique_id: `${UNIQUE_PREFIX}_${id}_switch_${state.index}`,
       command_topic: tasmotaTopic(config, 'cmnd', key),
       payload_on: 'ON',
@@ -290,7 +304,7 @@ function addTasmota(device: Device, entities: Entities): void {
     for (const spec of specs) {
       entities.sensor.push(
         sensor(
-          `${device.name} ${spec.label}`,
+          measurementName(null, spec.label),
           `${UNIQUE_PREFIX}_${id}_${spec.key}`,
           sensorTopic,
           `{{ value_json.${spec.template} }}`,
@@ -304,13 +318,14 @@ function addTasmota(device: Device, entities: Entities): void {
 
   for (const state of device.sensors) {
     const key = tasmotaSensorKey(device.sensors.length, state.index);
-    // A hibás hőmérő kimarad a SENSOR üzenetből: ilyenkor az érték nem változik.
+    // A hibás hőmérő kimarad a SENSOR üzenetből: az üres eredményt a Home Assistant
+    // figyelmen kívül hagyja, így az érték nem változik.
     entities.sensor.push(
       sensor(
-        `${device.name} ${key}`,
+        key,
         `${UNIQUE_PREFIX}_${id}_${slug(key)}`,
         sensorTopic,
-        `{{ value_json['${key}'].Temperature if '${key}' in value_json else this.state }}`,
+        `{{ value_json['${key}'].Temperature if '${key}' in value_json else '' }}`,
         measurement('temperature', 'hőmérséklet', '°C', 'temperature', ''),
         availability,
         deviceBlock,
@@ -330,7 +345,7 @@ function measurement(
 }
 
 function sensor(
-  name: string,
+  name: string | null,
   uniqueId: string,
   stateTopic: string,
   valueTemplate: string,
@@ -353,14 +368,15 @@ function sensor(
 
 /**
  * Jinja-sablon, amely csak akkor ad új értéket, ha az üzenetben van ilyen mező;
- * különben megtartja az entitás eddigi állapotát (`this.state`). A NotifyStatus
- * csak a változott mezőket hordozza, ezért kell az ellenőrzés.
+ * különben üres szöveget ad, amit a Home Assistant figyelmen kívül hagy (az állapot
+ * marad). A NotifyStatus csak a változott mezőket hordozza, ezért kell az ellenőrzés.
+ * A `this.state` itt nem jó: amíg nincs érték, „unknown”, és azt a számszenzor hibának veszi.
  */
 function guarded(path: string, expression: string): string {
   const parts = path.replace(/^value_json\.?/, '');
   if (!parts.includes("params['")) return `{{ ${expression} }}`;
   const [component, field] = /params\['([^']+)'\]\.(.+)$/.exec(path)!.slice(1);
-  return `{% set c = value_json.params['${component}'] if value_json.params is defined and '${component}' in value_json.params else {} %}{{ (${expression}) if '${field.split('.')[0]}' in c else this.state }}`;
+  return `{% set c = value_json.params['${component}'] if value_json.params is defined and '${component}' in value_json.params else {} %}{{ (${expression}) if '${field.split('.')[0]}' in c else '' }}`;
 }
 
 function rpcSet(index: number, on: boolean): string {
