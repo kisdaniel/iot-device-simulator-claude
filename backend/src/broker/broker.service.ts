@@ -1,12 +1,12 @@
 import { readFileSync } from 'node:fs';
 import {
   type BrokerSettings,
-  type BrokerSettingsView,
   type BrokerTestResult,
   DEFAULT_BROKER_SETTINGS,
 } from '@iot-sim/shared';
 import { ConflictException, Inject, Injectable } from '@nestjs/common';
 import { connect, type IClientOptions } from 'mqtt';
+import { type Observable, Subject } from 'rxjs';
 import { APP_CONFIG } from '../config/config.module.js';
 import type { AppConfig } from '../config/env.js';
 import { SettingsStore } from '../storage/settings.store.js';
@@ -17,6 +17,11 @@ const TEST_TIMEOUT_MS = 5000;
 
 @Injectable()
 export class BrokerService {
+  private readonly changed = new Subject<void>();
+
+  /** Jelez, amikor a mentett brokerbeállítás megváltozott (a közös kapcsolat ekkor újraépül). */
+  readonly changed$: Observable<void> = this.changed.asObservable();
+
   constructor(
     @Inject(APP_CONFIG) private readonly config: AppConfig,
     private readonly settings: SettingsStore,
@@ -35,23 +40,22 @@ export class BrokerService {
     );
   }
 
-  async getView(): Promise<BrokerSettingsView> {
+  /** A beállítás jelszó nélkül, ahogy az API kiadja. */
+  async getPublicSettings(): Promise<
+    Omit<BrokerSettings, 'password'> & { hasPassword: boolean }
+  > {
     const { password, ...rest } = await this.getSettings();
-    return {
-      ...rest,
-      hasPassword: Boolean(password),
-      managedByEnv: this.managedByEnv,
-    };
+    return { ...rest, hasPassword: Boolean(password) };
   }
 
-  async update(dto: BrokerSettingsDto): Promise<BrokerSettingsView> {
+  async update(dto: BrokerSettingsDto): Promise<void> {
     if (this.managedByEnv) {
       throw new ConflictException(
         'A brokerbeállítás környezeti változóból (MQTT_URL) jön, ezért nem módosítható.',
       );
     }
     await this.settings.set(SETTINGS_KEY, await this.merge(dto));
-    return this.getView();
+    this.changed.next();
   }
 
   /** Próbakapcsolat a megadott beállítással, mentés nélkül. */
