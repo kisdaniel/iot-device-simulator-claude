@@ -1,6 +1,13 @@
 import { HttpClient } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
-import type { BrokerSettingsView, BrokerTestResult, Device } from '@iot-sim/shared';
+import type {
+  BrokerSettingsView,
+  BrokerTestResult,
+  CreateDeviceRequest,
+  DeviceView,
+  MqttLogEntry,
+  UpdateDeviceRequest,
+} from '@iot-sim/shared';
 import { Observable } from 'rxjs';
 
 /** A brokerűrlap törzse; elhagyott jelszó a tárolt jelszót megtartja. */
@@ -16,8 +23,35 @@ export interface BrokerSettingsInput {
 export class Api {
   private readonly http = inject(HttpClient);
 
-  listDevices(): Observable<Device[]> {
-    return this.http.get<Device[]>('/api/devices');
+  listDevices(): Observable<DeviceView[]> {
+    return this.http.get<DeviceView[]>('/api/devices');
+  }
+
+  createDevice(body: CreateDeviceRequest): Observable<DeviceView> {
+    return this.http.post<DeviceView>('/api/devices', body);
+  }
+
+  updateDevice(id: string, body: UpdateDeviceRequest): Observable<DeviceView> {
+    return this.http.patch<DeviceView>(`/api/devices/${id}`, body);
+  }
+
+  deleteDevice(id: string): Observable<void> {
+    return this.http.delete<void>(`/api/devices/${id}`);
+  }
+
+  setEnabled(id: string, enabled: boolean): Observable<DeviceView> {
+    return this.http.post<DeviceView>(
+      `/api/devices/${id}/${enabled ? 'connect' : 'disconnect'}`,
+      {},
+    );
+  }
+
+  setSwitch(id: string, index: number, output: boolean): Observable<DeviceView> {
+    return this.http.put<DeviceView>(`/api/devices/${id}/switches/${index}`, { output });
+  }
+
+  messages(id: string): Observable<MqttLogEntry[]> {
+    return this.http.get<MqttLogEntry[]>(`/api/devices/${id}/messages`);
   }
 
   getBroker(): Observable<BrokerSettingsView> {

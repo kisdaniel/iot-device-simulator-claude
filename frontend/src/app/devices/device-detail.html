@@ -1,0 +1,165 @@
+<nav aria-label="breadcrumb">
+  <ol class="breadcrumb">
+    <li class="breadcrumb-item"><a routerLink="/">Eszközök</a></li>
+    <li class="breadcrumb-item active" aria-current="page">{{ device()?.name ?? '…' }}</li>
+  </ol>
+</nav>
+
+@if (notFound()) {
+  <div class="alert alert-warning" role="alert">Az eszköz nem található.</div>
+} @else if (device(); as d) {
+  <div class="d-flex flex-wrap align-items-center gap-2 mb-1">
+    <h1 class="h3 mb-0 me-2">{{ d.name }}</h1>
+    @if (d.status === 'online') {
+      <span class="badge text-bg-success">Elérhető</span>
+    } @else if (!d.enabled) {
+      <span class="badge text-bg-secondary">Lekapcsolva</span>
+    } @else {
+      <span class="badge text-bg-warning">Nem elérhető</span>
+    }
+    <div class="ms-auto d-flex gap-2">
+      @if (d.enabled) {
+        <button
+          type="button"
+          class="btn btn-sm btn-outline-secondary"
+          [disabled]="busy()"
+          (click)="setEnabled(d, false)"
+        >
+          <i class="bi bi-wifi-off me-1" aria-hidden="true"></i>Lekapcsolás
+        </button>
+      } @else {
+        <button
+          type="button"
+          class="btn btn-sm btn-outline-success"
+          [disabled]="busy()"
+          (click)="setEnabled(d, true)"
+        >
+          <i class="bi bi-wifi me-1" aria-hidden="true"></i>Visszakapcsolás
+        </button>
+      }
+      <a class="btn btn-sm btn-outline-primary" [routerLink]="['/devices', d.id, 'edit']">
+        <i class="bi bi-pencil me-1" aria-hidden="true"></i>Szerkesztés
+      </a>
+      <button
+        type="button"
+        class="btn btn-sm btn-outline-danger"
+        [disabled]="busy()"
+        (click)="remove(d)"
+      >
+        <i class="bi bi-trash me-1" aria-hidden="true"></i>Törlés
+      </button>
+    </div>
+  </div>
+  <p class="text-secondary mb-4">
+    {{ typeLabel(d) }} · <code>{{ identity(d) }}</code>
+  </p>
+
+  @if (error(); as message) {
+    <div class="alert alert-danger" role="alert">{{ message }}</div>
+  }
+  @if (!d.enabled) {
+    <div class="alert alert-secondary" role="status">
+      Az eszköz le van kapcsolva: nem küld és nem fogad üzenetet. A kapcsolók állíthatók, mint a
+      fizikai gomb hálózat nélkül; visszakapcsoláskor az eszköz közzéteszi az állapotát.
+    </div>
+  }
+
+  <div class="row g-4">
+    <div class="col-lg-5">
+      <div class="card mb-4">
+        <div class="card-header">Kapcsolók</div>
+        <ul class="list-group list-group-flush">
+          @for (sw of d.switches; track sw.index) {
+            <li class="list-group-item d-flex align-items-center justify-content-between">
+              <div class="form-check form-switch mb-0">
+                <input
+                  class="form-check-input"
+                  type="checkbox"
+                  role="switch"
+                  [id]="'sw-' + sw.index"
+                  [checked]="sw.output"
+                  [disabled]="busy()"
+                  (click)="toggle($event, d, sw.index, sw.output)"
+                />
+                <label class="form-check-label" [for]="'sw-' + sw.index"
+                  >{{ switchLabel(d, sw.index) }}
+                  <code class="small">switch:{{ sw.index }}</code></label
+                >
+              </div>
+              <span class="small text-secondary">forrás: {{ sw.source }}</span>
+            </li>
+          }
+        </ul>
+        <div class="card-footer small text-secondary">
+          A fogyasztásmérő értékei a következő fejlesztési lépésben állíthatók.
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">MQTT topicok</div>
+        <ul class="list-group list-group-flush small">
+          @for (row of topics(); track row.topic) {
+            <li class="list-group-item">
+              <span
+                class="badge me-1"
+                [class]="row.direction === 'be' ? 'text-bg-primary' : 'text-bg-secondary'"
+                >{{ row.direction }}</span
+              >
+              <code>{{ row.topic }}</code>
+              <div class="text-secondary">{{ row.description }}</div>
+            </li>
+          }
+        </ul>
+      </div>
+    </div>
+
+    <div class="col-lg-7">
+      <div class="card">
+        <div class="card-header d-flex align-items-center">
+          <span class="me-auto">Üzenetnapló</span>
+          <button type="button" class="btn btn-sm btn-link p-0" (click)="clearLog()">Ürítés</button>
+        </div>
+        @if (messages().length === 0) {
+          <div class="card-body text-secondary small">Még nincs üzenet.</div>
+        } @else {
+          <div class="table-responsive" style="max-height: 32rem">
+            <table class="table table-sm small mb-0 align-top">
+              <thead class="sticky-top">
+                <tr>
+                  <th scope="col">Idő</th>
+                  <th scope="col">Irány</th>
+                  <th scope="col">Topic és tartalom</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (m of messages(); track $index) {
+                  <tr>
+                    <td class="text-nowrap text-secondary">{{ m.ts | date: 'HH:mm:ss.SSS' }}</td>
+                    <td>
+                      <span
+                        class="badge"
+                        [class]="m.direction === 'in' ? 'text-bg-primary' : 'text-bg-secondary'"
+                        >{{ m.direction === 'in' ? 'be' : 'ki' }}</span
+                      >
+                    </td>
+                    <td>
+                      <code>{{ m.topic }}</code>
+                      @if (m.retain) {
+                        <span class="badge text-bg-light border ms-1">retain</span>
+                      }
+                      <div class="font-monospace text-break text-body-secondary">
+                        {{ m.payload }}
+                      </div>
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        }
+      </div>
+    </div>
+  </div>
+} @else {
+  <div class="text-secondary" role="status">Betöltés…</div>
+}
