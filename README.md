@@ -2,7 +2,7 @@
 
 Shelly (1PM, 2PM, Add-on; Gen2, Gen3, Gen4) és Tasmota eszközök szimulációja MQTT-n keresztül, webes kezelőfelülettel. A szimulált eszközök ugyanazokat az üzeneteket küldik és fogadják, mint a valódiak, így a rájuk épülő rendszerek hardver nélkül tesztelhetők.
 
-> **Állapot:** a projekt váza készült el (monorepo, adatbázis, brokerbeállítás, Docker). Az eszközök szimulációja a következő lépésekben érkezik; a sorrendet a [technikai specifikáció](docs/technikai-specifikacio.md) „Megvalósítási lépések” szakasza írja le.
+> **Állapot:** elkészült a projekt váza és a szimulációs mag (közös MQTT-kapcsolat, topic-útválasztás, eseményfolyam). Eszközprofil még nincs, ezért eszközt felvenni és szimulálni még nem lehet; a sorrendet a [technikai specifikáció](docs/technikai-specifikacio.md) „Megvalósítási lépések” szakasza írja le.
 
 ## Dokumentáció
 
