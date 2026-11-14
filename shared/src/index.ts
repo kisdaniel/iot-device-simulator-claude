@@ -81,6 +81,15 @@ export interface BrokerSettings {
   password: string | null;
 }
 
+export type BrokerConnectionStatus =
+  'disconnected' | 'connecting' | 'connected' | 'error';
+
+export interface BrokerConnection {
+  status: BrokerConnectionStatus;
+  /** Az utolsó hiba szövege, ha a kapcsolat nem él */
+  error?: string;
+}
+
 /** A GET /api/broker válasza: a jelszó soha nem megy ki. */
 export interface BrokerSettingsView {
   host: string;
@@ -90,6 +99,8 @@ export interface BrokerSettingsView {
   hasPassword: boolean;
   /** true, ha a beállítás környezeti változóból jön, és nem szerkeszthető */
   managedByEnv: boolean;
+  /** A közös MQTT-kapcsolat pillanatnyi állapota */
+  connection: BrokerConnection;
 }
 
 export interface BrokerTestResult {
@@ -100,6 +111,7 @@ export interface BrokerTestResult {
 export interface HealthStatus {
   status: 'ok';
   version: string;
+  mqtt: BrokerConnectionStatus;
 }
 
 export const DEFAULT_BROKER_SETTINGS: BrokerSettings = {
@@ -109,3 +121,37 @@ export const DEFAULT_BROKER_SETTINGS: BrokerSettings = {
   username: null,
   password: null,
 };
+
+/** Egy eszköz küldött vagy fogadott MQTT-üzenete az üzenetnaplóban. */
+export interface MqttLogEntry {
+  deviceId: string;
+  /** ISO időbélyeg */
+  ts: string;
+  direction: 'in' | 'out';
+  topic: string;
+  payload: string;
+  retain: boolean;
+}
+
+export type DeviceRunStatus = 'online' | 'offline';
+
+/** A GET /api/events (SSE) eseményei: az esemény neve a `type`, a törzse a `data`. */
+export type SimEvent =
+  | { type: 'device.updated'; data: Device }
+  | { type: 'device.removed'; data: { id: string } }
+  | { type: 'device.connection'; data: { id: string; status: DeviceRunStatus } }
+  | { type: 'broker.status'; data: BrokerConnection }
+  | { type: 'mqtt.message'; data: MqttLogEntry };
+
+export type SimEventType = SimEvent['type'];
+
+export const SIM_EVENT_TYPES: readonly SimEventType[] = [
+  'device.updated',
+  'device.removed',
+  'device.connection',
+  'broker.status',
+  'mqtt.message',
+];
+
+/** A közös kapcsolat saját állapottopicja; ez a kapcsolat egyetlen végakarata (LWT). */
+export const SIMULATOR_STATUS_TOPIC = 'iot-simulator/status';
