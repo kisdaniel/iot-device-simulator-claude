@@ -1,13 +1,20 @@
 <h1 class="h3 mb-4">Beállítások</h1>
 
 <div class="card" style="max-width: 40rem">
-  <div class="card-header">MQTT broker</div>
+  <div class="card-header d-flex justify-content-between align-items-center">
+    <span>MQTT broker</span>
+    <span class="badge" [class]="status.badgeClass()" role="status">{{ status.label() }}</span>
+  </div>
   <div class="card-body">
     @if (view()?.managedByEnv) {
       <div class="alert alert-info" role="status">
         A brokerbeállítás környezeti változóból (<code>MQTT_URL</code>) jön, ezért itt csak
         olvasható.
       </div>
+    }
+
+    @if (status.connection()?.error; as connectionError) {
+      <div class="alert alert-warning" role="alert">Utolsó hiba: {{ connectionError }}</div>
     }
 
     <form [formGroup]="form" (ngSubmit)="save()" novalidate>

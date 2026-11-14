@@ -1,3 +1,5 @@
+import { provideHttpClient } from '@angular/common/http';
+import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 import { App } from './app';
@@ -6,7 +8,7 @@ describe('App', () => {
   beforeEach(async () => {
     await TestBed.configureTestingModule({
       imports: [App],
-      providers: [provideRouter([])],
+      providers: [provideRouter([]), provideHttpClient(), provideHttpClientTesting()],
     }).compileComponents();
   });
 
@@ -19,5 +21,23 @@ describe('App', () => {
       a.textContent?.trim(),
     );
     expect(links).toEqual(['Eszközök', 'Beállítások']);
+  });
+
+  it('a fejlécben mutatja a brokerkapcsolat állapotát', async () => {
+    const fixture = TestBed.createComponent(App);
+    const http = TestBed.inject(HttpTestingController);
+    http.expectOne('/api/broker').flush({
+      host: 'localhost',
+      port: 1883,
+      tls: false,
+      username: null,
+      hasPassword: false,
+      managedByEnv: false,
+      connection: { status: 'connected' },
+    });
+    await fixture.whenStable();
+    const badge = (fixture.nativeElement as HTMLElement).querySelector('.badge');
+    expect(badge?.textContent?.trim()).toBe('Broker: csatlakozva');
+    expect(badge?.classList).toContain('text-bg-success');
   });
 });
