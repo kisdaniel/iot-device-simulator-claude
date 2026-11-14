@@ -102,6 +102,7 @@ export class DeviceForm {
       ],
       publishOnChange: [TASMOTA_DEFAULTS.publishOnChange as boolean],
       powerRetain: [TASMOTA_DEFAULTS.powerRetain as boolean],
+      discovery: [false],
     }),
   });
 
@@ -147,7 +148,7 @@ export class DeviceForm {
           relayCount: Number(t.relayCount),
           hasEnergy: t.hasEnergy,
           sensorCount: Number(t.sensorCount),
-          discovery: false,
+          discovery: t.discovery,
           telePeriod: Number(t.telePeriod),
           publishOnChange: t.publishOnChange,
           powerRetain: t.powerRetain,
@@ -335,6 +336,7 @@ export class DeviceForm {
       telePeriod: Number(t.telePeriod),
       publishOnChange: t.publishOnChange,
       powerRetain: t.powerRetain,
+      discovery: t.discovery,
     };
   }
 
@@ -355,6 +357,7 @@ export class DeviceForm {
           telePeriod: t.telePeriod,
           publishOnChange: t.publishOnChange,
           powerRetain: t.powerRetain,
+          discovery: t.discovery,
         },
       });
     } else if (device.shelly) {

@@ -4,6 +4,7 @@ import {
   SHELLY_MODELS,
   type ShellyDeviceType,
   shellyTopicPrefix,
+  tasmotaDiscoveryTopic,
   tasmotaGroupTopic,
   tasmotaPowerKey,
   tasmotaSensorKey,
@@ -92,6 +93,20 @@ export function tasmotaTopics(device: Device): TopicRow[] {
       description: `Állapot ${config.telePeriod} mp-enként`,
     },
   ];
+  if (config.discovery) {
+    rows.push(
+      {
+        topic: tasmotaDiscoveryTopic(config.mac, 'config'),
+        direction: 'ki',
+        description: 'Discovery: az eszköz leírása, megőrzött',
+      },
+      {
+        topic: tasmotaDiscoveryTopic(config.mac, 'sensors'),
+        direction: 'ki',
+        description: 'Discovery: a szenzorok szerkezete, megőrzött',
+      },
+    );
+  }
   if (config.hasEnergy || device.sensors.length > 0) {
     rows.push({
       topic: tasmotaTopic(config, 'tele', 'SENSOR'),
