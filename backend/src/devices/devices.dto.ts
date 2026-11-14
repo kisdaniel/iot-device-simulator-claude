@@ -1,0 +1,139 @@
+import {
+  SHELLY_DEVICE_TYPES,
+  SHELLY_GENERATIONS,
+  type ShellyDeviceType,
+  type ShellyGeneration,
+} from '@iot-sim/shared';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { Type } from 'class-transformer';
+import {
+  IsBoolean,
+  IsDefined,
+  IsIn,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+  Matches,
+  MaxLength,
+  ValidateNested,
+} from 'class-validator';
+
+/** MQTT topic-előtag: helyettesítő, szóköz és a két végén perjel nélkül. */
+const TOPIC_PREFIX = /^(?!\/)[^\s#+]*[^\s#+/]$/;
+const TOPIC_PREFIX_MESSAGE =
+  'a topic-előtag nem tartalmazhat szóközt, # vagy + jelet, és nem kezdődhet vagy végződhet perjellel';
+
+export class CreateShellyDto {
+  @ApiProperty({ enum: SHELLY_GENERATIONS, example: 3 })
+  @IsIn(SHELLY_GENERATIONS, { message: 'a generáció 2, 3 vagy 4 lehet' })
+  generation: ShellyGeneration;
+
+  @ApiPropertyOptional({
+    example: 'a8032abe54dc',
+    description: '12 hex jegy; elhagyva véletlen',
+  })
+  @IsOptional()
+  @Matches(/^[0-9a-fA-F]{12}$/, { message: 'a MAC-cím 12 hexadecimális jegy' })
+  mac?: string;
+
+  @ApiPropertyOptional({
+    nullable: true,
+    type: String,
+    description: 'elhagyva az eszközazonosító',
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(128)
+  @Matches(TOPIC_PREFIX, { message: TOPIC_PREFIX_MESSAGE })
+  topicPrefix?: string | null;
+
+  @ApiPropertyOptional({ default: true })
+  @IsOptional()
+  @IsBoolean()
+  rpcNtf?: boolean;
+
+  @ApiPropertyOptional({ default: true })
+  @IsOptional()
+  @IsBoolean()
+  statusNtf?: boolean;
+
+  @ApiPropertyOptional({ default: true })
+  @IsOptional()
+  @IsBoolean()
+  enableControl?: boolean;
+}
+
+export class CreateDeviceDto {
+  @ApiProperty({ example: 'Bojler' })
+  @IsString()
+  @IsNotEmpty({ message: 'a név nem lehet üres' })
+  @MaxLength(64)
+  name: string;
+
+  @ApiProperty({ enum: SHELLY_DEVICE_TYPES })
+  @IsIn(SHELLY_DEVICE_TYPES, {
+    message:
+      'a típus shelly-1pm vagy shelly-2pm lehet (a Tasmota egy későbbi lépésben érkezik)',
+  })
+  type: ShellyDeviceType;
+
+  @ApiPropertyOptional({ default: true })
+  @IsOptional()
+  @IsBoolean()
+  enabled?: boolean;
+
+  @ApiProperty({ type: CreateShellyDto })
+  @IsDefined({ message: 'a shelly beállítás kötelező' })
+  @ValidateNested()
+  @Type(() => CreateShellyDto)
+  shelly: CreateShellyDto;
+}
+
+export class UpdateShellyDto {
+  @ApiPropertyOptional({
+    nullable: true,
+    type: String,
+    description: 'null vagy üres: az azonosító',
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(128)
+  @Matches(/^$|^(?!\/)[^\s#+]*[^\s#+/]$/, { message: TOPIC_PREFIX_MESSAGE })
+  topicPrefix?: string | null;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsBoolean()
+  rpcNtf?: boolean;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsBoolean()
+  statusNtf?: boolean;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsBoolean()
+  enableControl?: boolean;
+}
+
+export class UpdateDeviceDto {
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  @IsNotEmpty({ message: 'a név nem lehet üres' })
+  @MaxLength(64)
+  name?: string;
+
+  @ApiPropertyOptional({ type: UpdateShellyDto })
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => UpdateShellyDto)
+  shelly?: UpdateShellyDto;
+}
+
+export class SetSwitchDto {
+  @ApiProperty()
+  @IsBoolean()
+  output: boolean;
+}

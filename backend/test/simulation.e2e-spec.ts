@@ -1,5 +1,5 @@
 import { get as httpGet } from 'node:http';
-import type { AddressInfo } from 'node:net';
+import type { AddressInfo, Server } from 'node:net';
 import {
   type Device,
   SIMULATOR_STATUS_TOPIC,
@@ -40,6 +40,7 @@ const echoProfile: DeviceProfile = {
       payload: payload.toString(),
     });
   },
+  onSwitchChanged: () => undefined,
   onTick: (ctx, now) => {
     ctx.publish(`tele/${ctx.device.tasmota!.topic}/TICK`, now.toISOString());
   },
@@ -115,7 +116,7 @@ describe('Szimulációs mag (e2e)', () => {
       () => broker.last('tele/t1/LWT') === 'Online',
       't1 bejelentkezik',
     );
-    expect(simulation.status('id-t1')).toBe('online');
+    expect(simulation.get('id-t1')?.status).toBe('online');
 
     control = await connectAsync(broker.url);
     await control.publishAsync('cmnd/t1/POWER', 'ON');
@@ -187,7 +188,7 @@ describe('Szimulációs mag (e2e)', () => {
     await new Promise((resolve) => setTimeout(resolve, 200));
     expect(broker.last('tele/off/LWT')).toBeUndefined();
     expect(broker.last('stat/off/RESULT')).toBeUndefined();
-    expect(simulation.status('id-off')).toBe('offline');
+    expect(simulation.get('id-off')?.status).toBe('offline');
   });
 
   it('egy hibázó profil nem állítja meg az eszközt és a többieket', async () => {
@@ -250,7 +251,7 @@ describe('Szimulációs mag (e2e)', () => {
       () => !gateway.isConnected,
       'a kapcsolat megszakadása észlelhető',
     );
-    expect(simulation.status('id-t1')).toBe('offline');
+    expect(simulation.get('id-t1')?.status).toBe('offline');
 
     broker = await new TestBroker().start(port);
     await waitFor(
@@ -258,7 +259,7 @@ describe('Szimulációs mag (e2e)', () => {
       't1 újra bejelentkezik',
       12_000,
     );
-    expect(simulation.status('id-t1')).toBe('online');
+    expect(simulation.get('id-t1')?.status).toBe('online');
 
     // A feliratkozások is visszaálltak.
     control = await connectAsync(broker.url);
@@ -286,7 +287,9 @@ describe('Szimulációs mag (e2e)', () => {
   it('az SSE végpont továbbítja az eseményeket', async () => {
     const { simulation } = await startApp();
     await app.listen(0, '127.0.0.1');
-    const { port } = app.getHttpServer().address() as AddressInfo;
+    const { port } = (
+      app.getHttpServer() as unknown as Server
+    ).address() as AddressInfo;
 
     const received: string[] = [];
     const req = httpGet(
