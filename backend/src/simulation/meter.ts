@@ -28,13 +28,49 @@ export interface MeterReading {
   energyTotal: number;
 }
 
+/** A pillanatnyi teljesítmény: a terhelés, ha a kimenet be van kapcsolva, különben 0. */
+export function powerOf(state: SwitchState): number {
+  return state.output && state.meter ? state.meter.loadPower : 0;
+}
+
+/**
+ * A számláló értéke egy adott pillanatban (Wh): a legutóbb rögzített érték, plusz
+ * az azóta eltelt idő a pillanatnyi teljesítménnyel. Az eltelt idő nem lehet negatív.
+ */
+export function energyAt(state: SwitchState, now: Date): number {
+  const meter = state.meter;
+  if (!meter) return 0;
+  const elapsedMs = Math.max(
+    0,
+    now.getTime() - Date.parse(meter.energyUpdatedAt),
+  );
+  return meter.energyTotalWh + (powerOf(state) * elapsedMs) / 3_600_000;
+}
+
+/**
+ * Rögzíti a számlálót a megadott pillanatig. Minden olyan változás előtt hívandó,
+ * amely a teljesítményt módosíthatja (kapcsolás, terhelés), és mentés előtt.
+ */
+export function commitEnergy(state: SwitchState, now: Date): void {
+  const meter = state.meter;
+  if (!meter) return;
+  const updatedAt = Date.parse(meter.energyUpdatedAt);
+  const delta = energyAt(state, now) - meter.energyTotalWh;
+  meter.energyTotalWh += delta;
+  meter.energyTodayWh += delta;
+  if (now.getTime() > updatedAt) meter.energyUpdatedAt = now.toISOString();
+}
+
 /**
  * P = terhelés, ha a kimenet be van kapcsolva, különben 0;
  * I = P / (U · cos φ), vagy a kézzel megadott érték (kikapcsolva ekkor is 0).
  */
-export function readMeter(state: SwitchState): MeterReading {
+export function readMeter(
+  state: SwitchState,
+  now: Date = new Date(),
+): MeterReading {
   const meter = state.meter ?? defaultMeter(new Date(0));
-  const power = state.output ? meter.loadPower : 0;
+  const power = powerOf(state);
   let current = 0;
   if (state.output) {
     const divisor = meter.voltage * meter.powerFactor;
@@ -46,7 +82,7 @@ export function readMeter(state: SwitchState): MeterReading {
     voltage: meter.voltage,
     powerFactor: meter.powerFactor,
     frequency: meter.frequency,
-    energyTotal: meter.energyTotalWh,
+    energyTotal: energyAt(state, now),
   };
 }
 

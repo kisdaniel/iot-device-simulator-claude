@@ -12,11 +12,13 @@ import type { AppConfig } from '../config/env.js';
 import { EventBus } from '../events/event-bus.service.js';
 import { MqttGateway } from '../mqtt/mqtt-gateway.service.js';
 import { DeviceStore } from '../storage/device.store.js';
-import type { ChangeSource } from './device-profile.js';
+import type { ChangeSource, MeterPatch } from './device-profile.js';
 import { ProfileRegistry } from './profile-registry.js';
 import { SimulatedDevice } from './simulated-device.js';
 
 const TICK_MS = 1000;
+/** A folyamatosan növő számlálók ennyi óraütésenként (másodpercenként) mentődnek. */
+const ENERGY_SAVE_TICKS = 10;
 
 /**
  * A futó eszközök nyilvántartása, életciklusa és közös órája. Minden tárolt
@@ -31,6 +33,7 @@ export class SimulationService
   private readonly subscriptions: Subscription[] = [];
   private readonly warnedTypes = new Set<string>();
   private timer: NodeJS.Timeout | null = null;
+  private ticks = 0;
   /** Az állapotmentések sorban futnak, hogy a későbbi ne előzhesse meg a korábbit. */
   private writes: Promise<void> = Promise.resolve();
 
@@ -51,7 +54,14 @@ export class SimulationService
         for (const device of this.devices.values()) device.suspend();
       }),
     );
-    for (const device of await this.store.list()) this.load(device);
+    const now = new Date().toISOString();
+    for (const device of await this.store.list()) {
+      // A szimulátor leállása alatt a számláló áll: az eltelt idő innen indul újra.
+      for (const state of device.switches) {
+        if (state.meter) state.meter.energyUpdatedAt = now;
+      }
+      this.load(device);
+    }
     // Egyetlen közös óra hívja az összes eszközt, nincs eszközönkénti időzítő.
     this.timer = setInterval(() => this.tick(new Date()), TICK_MS);
     this.timer.unref();
@@ -61,7 +71,12 @@ export class SimulationService
   async beforeApplicationShutdown(): Promise<void> {
     if (this.timer) clearInterval(this.timer);
     for (const subscription of this.subscriptions) subscription.unsubscribe();
-    for (const device of this.devices.values()) device.stop();
+    const now = new Date();
+    for (const device of this.devices.values()) {
+      device.stop();
+      device.commitEnergy(now);
+      this.save(device);
+    }
     this.devices.clear();
     await this.writes;
   }
@@ -143,13 +158,39 @@ export class SimulationService
     return this.view(device);
   }
 
+  setMeter(id: string, index: number, patch: MeterPatch): DeviceView {
+    const device = this.require(id);
+    device.setMeter(index, patch);
+    return this.view(device);
+  }
+
+  resetEnergy(id: string, index: number): DeviceView {
+    const device = this.require(id);
+    device.resetEnergy(index);
+    return this.view(device);
+  }
+
   messages(id: string): readonly MqttLogEntry[] | undefined {
     return this.devices.get(id)?.messages;
   }
 
   /** A közös óra egy ütése; a tesztek közvetlenül is hívhatják. */
   tick(now: Date): void {
-    for (const device of this.devices.values()) device.tick(now);
+    this.ticks++;
+    const saveEnergy = this.ticks % ENERGY_SAVE_TICKS === 0;
+    for (const device of this.devices.values()) {
+      device.tick(now);
+      if (saveEnergy && device.isConsuming) {
+        device.commitEnergy(now);
+        this.save(device);
+      }
+    }
+  }
+
+  /** Megállítja a közös órát; a tesztek ezután `tick()` hívással léptetik az időt. */
+  pauseClock(): void {
+    if (this.timer) clearInterval(this.timer);
+    this.timer = null;
   }
 
   /** Megvárja a folyamatban lévő állapotmentéseket (tesztekhez és leálláshoz). */
@@ -169,6 +210,12 @@ export class SimulationService
   }
 
   private stateChanged(device: SimulatedDevice): void {
+    this.save(device);
+    this.bus.emit({ type: 'device.updated', data: this.view(device) });
+  }
+
+  /** A kapcsolók állapotának mentése, sorba állítva. */
+  private save(device: SimulatedDevice): void {
     const snapshot = structuredClone(device.device);
     this.writes = this.writes
       .then(() => this.store.saveSwitches(snapshot))
@@ -177,6 +224,5 @@ export class SimulationService
           `Az állapot mentése nem sikerült (${snapshot.id}): ${err.message}`,
         );
       });
-    this.bus.emit({ type: 'device.updated', data: this.view(device) });
   }
 }

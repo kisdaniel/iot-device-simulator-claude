@@ -1,8 +1,26 @@
-import type { Device, DeviceType, SwitchState } from '@iot-sim/shared';
+import type {
+  Device,
+  DeviceType,
+  MeterState,
+  SwitchState,
+} from '@iot-sim/shared';
 import type { PublishOptions } from '../mqtt/mqtt-gateway.service.js';
 
 /** Az állapotváltozás forrása, ahogy a Shelly `source` mezője is jelzi. */
 export type ChangeSource = 'init' | 'MQTT' | 'button' | 'timer';
+
+/** A felhasználó által állítható mérőmezők. */
+export type MeterPatch = Partial<
+  Pick<
+    MeterState,
+    | 'loadPower'
+    | 'voltage'
+    | 'currentOverride'
+    | 'powerFactor'
+    | 'frequency'
+    | 'energyTotalWh'
+  >
+>;
 
 /** Amit egy profil az eszközéről lát és amivel a külvilág felé hat. */
 export interface ProfileContext {
@@ -20,6 +38,13 @@ export interface ProfileContext {
    * Visszaadja a korábbi kimenetet. Nem létező kapcsolóra RangeError.
    */
   setSwitch(index: number, output: boolean, source: ChangeSource): boolean;
+  /** Nullázza a kapcsoló energiaszámlálóját; a nullázás előtti értéket adja (Wh). */
+  resetEnergy(index: number): number;
+  /**
+   * Eszközönkénti munkaterület a profil futási adatainak (pl. percenkénti bontás).
+   * Nem kerül mentésre; az eszköz újraindításakor kiürül.
+   */
+  readonly memory: Map<string, unknown>;
 }
 
 /**
@@ -41,6 +66,8 @@ export interface DeviceProfile {
     index: number,
     before: SwitchState,
   ): void;
+  /** A kapcsoló mérője megváltozott (terhelés, feszültség, számláló); `before` a korábbi állapot. */
+  onMeterChanged(ctx: ProfileContext, index: number, before: SwitchState): void;
   /** Másodpercenként egyszer, a közös óráról; a profil dönti el, mi esedékes. */
   onTick(ctx: ProfileContext, now: Date): void;
 }
