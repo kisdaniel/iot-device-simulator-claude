@@ -83,6 +83,21 @@ export interface DeviceProfile {
     index: number,
     before: TemperatureState,
   ): void;
+  /**
+   * Az eszköz végleg törlődik (nem csak lekapcsolódik): a profil eltávolíthatja
+   * a megőrzött üzeneteit (pl. discovery). Élő brokerkapcsolatnál hívódik.
+   */
+  onRemove?(ctx: ProfileContext): void;
+  /**
+   * A konfiguráció megváltozott. `restarted`: az eszköz közben újraindult, így az
+   * `onStart` már lefutott az új beállításokkal. Élő brokerkapcsolatnál hívódik,
+   * lekapcsolt eszközön is (a megőrzött üzenetek így is frissülnek).
+   */
+  onReconfigured?(
+    ctx: ProfileContext,
+    before: Device,
+    restarted: boolean,
+  ): void;
   /** Másodpercenként egyszer, a közös óráról; a profil dönti el, mi esedékes. */
   onTick(ctx: ProfileContext, now: Date): void;
 }

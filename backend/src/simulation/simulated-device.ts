@@ -116,6 +116,25 @@ export class SimulatedDevice {
     this.setOnline(false);
   }
 
+  /** Végleges törlés: a profil eltakarítja a megőrzött üzeneteit, majd leáll. */
+  remove(): void {
+    const profile = this.profile;
+    if (profile?.onRemove && this.options.gateway.isConnected) {
+      this.guard('onRemove', () => profile.onRemove!(this.ctx));
+    }
+    this.stop();
+  }
+
+  /** A konfiguráció megváltozott (`before`: a korábbi állapot). */
+  reconfigured(before: Device, restarted: boolean): void {
+    const profile = this.profile;
+    if (profile?.onReconfigured && this.options.gateway.isConnected) {
+      this.guard('onReconfigured', () =>
+        profile.onReconfigured!(this.ctx, before, restarted),
+      );
+    }
+  }
+
   tick(now: Date): void {
     const profile = this.profile;
     if (!this.online || !profile) return;
