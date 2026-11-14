@@ -388,3 +388,15 @@ export const SIM_EVENT_TYPES: readonly SimEventType[] = [
 
 /** A közös kapcsolat saját állapottopicja; ez a kapcsolat egyetlen végakarata (LWT). */
 export const SIMULATOR_STATUS_TOPIC = 'iot-simulator/status';
+
+/** A GET /api/homeassistant/config válasza. */
+export interface HomeAssistantConfigResult {
+  /** A configuration.yaml-ba másolható `mqtt:` blokk */
+  yaml: string;
+  /** A konfigurációba került eszközök száma */
+  deviceCount: number;
+  /** A létrehozott entitások száma */
+  entityCount: number;
+  /** Figyelmeztetések (kihagyott eszközök, korlátozott állapotjelentés) */
+  warnings: string[];
+}
