@@ -1,7 +1,7 @@
 import type { Device } from '@iot-sim/shared';
 import { Injectable } from '@nestjs/common';
 import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
-import { DataSource, Repository } from 'typeorm';
+import { DataSource, type EntityManager, Repository } from 'typeorm';
 import {
   deviceColumns,
   toDevice,
@@ -102,6 +102,63 @@ export class DeviceStore {
         );
       }
     });
+  }
+
+  /**
+   * Import: törlés, frissítés (a kapcsolók és a hőmérők cseréjével) és beszúrás egyetlen
+   * tranzakcióban; hiba esetén semmi nem változik. Az új eszközök a megadott sorrendben
+   * kerülnek a lista végére.
+   */
+  async applyImport(changes: {
+    create: readonly Device[];
+    update: readonly Device[];
+    remove: readonly string[];
+  }): Promise<void> {
+    const now = Date.now();
+    await this.dataSource.transaction(async (manager) => {
+      for (const id of changes.remove) {
+        await manager.delete(DeviceEntity, { id });
+      }
+      for (const device of changes.update) {
+        await manager.update(
+          DeviceEntity,
+          { id: device.id },
+          { ...deviceColumns(device), updatedAt: new Date(now).toISOString() },
+        );
+        await manager.delete(SwitchEntity, { deviceId: device.id });
+        await manager.delete(TemperatureSensorEntity, { deviceId: device.id });
+        await this.insertChildren(manager, device);
+      }
+      for (const [i, device] of changes.create.entries()) {
+        // A lista a létrehozás ideje szerint rendez: ezredmásodpercenként egy, a fájl sorrendjében.
+        const createdAt = new Date(now + i).toISOString();
+        await manager.insert(DeviceEntity, {
+          id: device.id,
+          ...deviceColumns(device),
+          createdAt,
+          updatedAt: createdAt,
+        });
+        await this.insertChildren(manager, device);
+      }
+    });
+  }
+
+  private async insertChildren(
+    manager: EntityManager,
+    device: Device,
+  ): Promise<void> {
+    if (device.switches.length > 0) {
+      await manager.insert(
+        SwitchEntity,
+        device.switches.map((s) => toSwitchEntity(device.id, s)),
+      );
+    }
+    if (device.sensors.length > 0) {
+      await manager.insert(
+        TemperatureSensorEntity,
+        device.sensors.map((s) => toSensorEntity(device.id, s)),
+      );
+    }
   }
 
   /** Törlés; a kapcsolók és a szenzorok a külső kulcs miatt vele együtt törlődnek. */
