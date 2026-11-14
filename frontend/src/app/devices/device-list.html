@@ -91,7 +91,9 @@
                       switchLabel(device, sw.index)
                     }}</label>
                   </div>
-                  <span class="small text-secondary">{{ sw.output ? 'Be' : 'Ki' }}</span>
+                  <span class="small text-secondary">{{
+                    sw.meter ? power(sw) : sw.output ? 'Be' : 'Ki'
+                  }}</span>
                 </li>
               }
             </ul>

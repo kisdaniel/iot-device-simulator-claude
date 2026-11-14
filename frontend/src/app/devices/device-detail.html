@@ -66,34 +66,31 @@
 
   <div class="row g-4">
     <div class="col-lg-5">
-      <div class="card mb-4">
-        <div class="card-header">Kapcsolók</div>
-        <ul class="list-group list-group-flush">
-          @for (sw of d.switches; track sw.index) {
-            <li class="list-group-item d-flex align-items-center justify-content-between">
-              <div class="form-check form-switch mb-0">
-                <input
-                  class="form-check-input"
-                  type="checkbox"
-                  role="switch"
-                  [id]="'sw-' + sw.index"
-                  [checked]="sw.output"
-                  [disabled]="busy()"
-                  (click)="toggle($event, d, sw.index, sw.output)"
-                />
-                <label class="form-check-label" [for]="'sw-' + sw.index"
-                  >{{ switchLabel(d, sw.index) }}
-                  <code class="small">switch:{{ sw.index }}</code></label
-                >
-              </div>
-              <span class="small text-secondary">forrás: {{ sw.source }}</span>
-            </li>
-          }
-        </ul>
-        <div class="card-footer small text-secondary">
-          A fogyasztásmérő értékei a következő fejlesztési lépésben állíthatók.
+      @for (sw of d.switches; track sw.index) {
+        <div class="card mb-4">
+          <div class="card-header d-flex align-items-center justify-content-between">
+            <div class="form-check form-switch mb-0">
+              <input
+                class="form-check-input"
+                type="checkbox"
+                role="switch"
+                [id]="'sw-' + sw.index"
+                [checked]="sw.output"
+                [disabled]="busy()"
+                (click)="toggle($event, d, sw.index, sw.output)"
+              />
+              <label class="form-check-label fw-semibold" [for]="'sw-' + sw.index"
+                >{{ switchLabel(d, sw.index) }}
+                <code class="small fw-normal">switch:{{ sw.index }}</code></label
+              >
+            </div>
+            <span class="small text-secondary">forrás: {{ sw.source }}</span>
+          </div>
+          <div class="card-body">
+            <app-meter-editor [device]="d" [state]="sw" [now]="now()" />
+          </div>
         </div>
-      </div>
+      }
 
       <div class="card">
         <div class="card-header">MQTT topicok</div>
