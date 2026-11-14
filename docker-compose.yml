@@ -1,0 +1,35 @@
+# Indítás: docker compose up --build
+# Felület: http://localhost:3000 – MQTT broker: localhost:1883
+services:
+  mosquitto:
+    image: eclipse-mosquitto:2
+    restart: unless-stopped
+    ports:
+      - "1883:1883"
+    volumes:
+      - ./docker/mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+      - mosquitto-data:/mosquitto/data
+    healthcheck:
+      test: ["CMD", "mosquitto_sub", "-h", "localhost", "-t", "$$SYS/broker/uptime", "-C", "1", "-W", "3"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  simulator:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      mosquitto:
+        condition: service_healthy
+    ports:
+      - "3000:3000"
+    environment:
+      # A brokerbeállítás környezetből jön, ezért a felületen csak olvasható.
+      MQTT_URL: mqtt://mosquitto:1883
+      LOG_LEVEL: info
+    volumes:
+      - simulator-data:/data
+
+volumes:
+  mosquitto-data:
+  simulator-data:
