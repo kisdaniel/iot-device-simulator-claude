@@ -5,6 +5,7 @@ import {
   type SwitchState,
 } from '@iot-sim/shared';
 import type { DeviceProfile, ProfileContext } from '../../device-profile.js';
+import { energyAt, round } from '../../meter.js';
 import {
   changedFields,
   deviceInfo,
@@ -100,13 +101,90 @@ export class ShellyProfile implements DeviceProfile {
     index: number,
     before: SwitchState,
   ): void {
+    this.notifyChange(ctx, index, before);
+  }
+
+  onMeterChanged(
+    ctx: ProfileContext,
+    index: number,
+    before: SwitchState,
+  ): void {
+    const state = ctx.device.switches.find((s) => s.index === index);
+    const minutes = minuteState(ctx);
+    const base = minutes.base.get(index);
+    if (state && base !== undefined) {
+      // Kézi számlálóállítás (nullázás) ne torzítsa a percenkénti bontást.
+      const now = new Date();
+      minutes.base.set(
+        index,
+        base + energyAt(state, now) - energyAt(before, now),
+      );
+    }
+    this.notifyChange(ctx, index, before);
+  }
+
+  /**
+   * Minden egész percben: a percenkénti bontás léptetése, majd az energiaszámláló
+   * jelentése (NotifyStatus és status/switch:N).
+   */
+  onTick(ctx: ProfileContext, now: Date): void {
+    const minute = Math.floor(now.getTime() / 60_000);
+    const minutes = minuteState(ctx);
+    if (minutes.current === undefined) {
+      minutes.current = minute;
+      for (const state of ctx.device.switches) {
+        minutes.base.set(state.index, energyAt(state, now));
+      }
+      return;
+    }
+    if (minute === minutes.current) return;
+    minutes.current = minute;
+
+    const config = shellyConfig(ctx.device);
+    const prefix = shellyTopicPrefix(config);
+    const params: Record<string, unknown> = { ts: shellyTimestamp(now) };
+    for (const state of ctx.device.switches) {
+      const energy = energyAt(state, now);
+      const base = minutes.base.get(state.index) ?? energy;
+      const history = minutes.byMinute.get(state.index) ?? [0, 0, 0];
+      // Az elmúlt perc energiája mWh-ban kerül a lista elejére.
+      minutes.byMinute.set(state.index, [
+        Math.max(0, (energy - base) * 1000),
+        ...history.slice(0, 2),
+      ]);
+      minutes.base.set(state.index, energy);
+
+      const status = switchStatus(state, now, byMinute(ctx, state.index));
+      params[`switch:${state.index}`] = {
+        id: state.index,
+        aenergy: status.aenergy,
+      };
+      if (config.statusNtf) {
+        ctx.publish(`${prefix}/status/switch:${state.index}`, status);
+      }
+    }
+    if (config.rpcNtf) {
+      ctx.publish(`${prefix}/events/rpc`, {
+        src: config.deviceId,
+        dst: `${prefix}/events`,
+        method: 'NotifyStatus',
+        params,
+      });
+    }
+  }
+
+  private notifyChange(
+    ctx: ProfileContext,
+    index: number,
+    before: SwitchState,
+  ): void {
     const config = shellyConfig(ctx.device);
     const prefix = shellyTopicPrefix(config);
     const state = ctx.device.switches.find((s) => s.index === index);
     if (!state) return;
 
     const now = new Date();
-    const after = switchStatus(state, now);
+    const after = switchStatus(state, now, byMinute(ctx, index));
     const changed = changedFields(switchStatus(before, now), after);
     if (Object.keys(changed).length === 0) return;
 
@@ -123,10 +201,6 @@ export class ShellyProfile implements DeviceProfile {
     }
     if (config.statusNtf)
       ctx.publish(`${prefix}/status/switch:${index}`, after);
-  }
-
-  onTick(): void {
-    // A percenkénti energiajelentés a mérési modellel együtt érkezik.
   }
 
   private handleRpc(ctx: ProfileContext, text: string): void {
@@ -177,16 +251,30 @@ export class ShellyProfile implements DeviceProfile {
         return { was_on: ctx.setSwitch(state.index, !state.output, 'MQTT') };
       }
       case 'switch.getstatus':
-        return switchStatus(this.switchParam(ctx, params), now);
+        return this.status(ctx, this.switchParam(ctx, params), now);
+      case 'switch.resetcounters': {
+        const state = this.switchParam(ctx, params);
+        return { aenergy: { total: round(ctx.resetEnergy(state.index), 3) } };
+      }
       case 'switch.getconfig':
         return switchConfig(this.switchParam(ctx, params));
       case 'shelly.getstatus':
-        return fullStatus(ctx.device, ctx.startedAt, now);
+        return fullStatus(ctx.device, ctx.startedAt, now, (index) =>
+          byMinute(ctx, index),
+        );
       case 'shelly.getdeviceinfo':
         return deviceInfo(ctx.device);
       default:
         throw new RpcError(404, `No handler for ${method}`);
     }
+  }
+
+  private status(
+    ctx: ProfileContext,
+    state: SwitchState,
+    now: Date,
+  ): Record<string, unknown> {
+    return switchStatus(state, now, byMinute(ctx, state.index));
   }
 
   private switchParam(ctx: ProfileContext, params: RpcParams): SwitchState {
@@ -208,7 +296,9 @@ export class ShellyProfile implements DeviceProfile {
     if (command === 'status_update') {
       ctx.publish(
         `${prefix}/status`,
-        fullStatus(ctx.device, ctx.startedAt, now),
+        fullStatus(ctx.device, ctx.startedAt, now, (index) =>
+          byMinute(ctx, index),
+        ),
       );
       this.publishComponentStatuses(ctx, now);
     } else if (command === 'announce') {
@@ -241,7 +331,7 @@ export class ShellyProfile implements DeviceProfile {
       case 'status_update':
         ctx.publish(
           `${prefix}/status/${component}`,
-          switchStatus(state, new Date()),
+          this.status(ctx, state, new Date()),
         );
         return;
       default:
@@ -257,10 +347,32 @@ export class ShellyProfile implements DeviceProfile {
     for (const state of ctx.device.switches) {
       ctx.publish(
         `${prefix}/status/switch:${state.index}`,
-        switchStatus(state, now),
+        this.status(ctx, state, now),
       );
     }
   }
+}
+
+interface MinuteState {
+  /** Az utoljára lezárt perc (Unix-perc); az első óraütés állítja be. */
+  current?: number;
+  /** A számláló értéke (Wh) a perc elején, kapcsolónként. */
+  base: Map<number, number>;
+  /** Az utolsó három lezárt perc energiája (mWh), legújabb elöl. */
+  byMinute: Map<number, number[]>;
+}
+
+function minuteState(ctx: ProfileContext): MinuteState {
+  let state = ctx.memory.get('minutes') as MinuteState | undefined;
+  if (!state) {
+    state = { base: new Map(), byMinute: new Map() };
+    ctx.memory.set('minutes', state);
+  }
+  return state;
+}
+
+function byMinute(ctx: ProfileContext, index: number): readonly number[] {
+  return minuteState(ctx).byMinute.get(index) ?? [0, 0, 0];
 }
 
 function parseFrame(text: string): RpcFrame | null {

@@ -36,8 +36,9 @@ export function shellyTimestamp(now: Date): number {
 export function switchStatus(
   state: SwitchState,
   now: Date,
+  byMinute: readonly number[] = [0, 0, 0],
 ): Record<string, unknown> {
-  const reading = readMeter(state);
+  const reading = readMeter(state, now);
   return {
     id: state.index,
     source: state.source,
@@ -49,8 +50,7 @@ export function switchStatus(
     pf: round(reading.powerFactor, 2),
     aenergy: {
       total: round(reading.energyTotal, 3),
-      // A percenkénti bontás a mérési modellel együtt érkezik.
-      by_minute: [0, 0, 0],
+      by_minute: byMinute.map((mWh) => round(mWh, 3)),
       minute_ts: Math.floor(now.getTime() / 60_000) * 60,
     },
     temperature: {
@@ -99,6 +99,7 @@ export function fullStatus(
   device: Device,
   startedAt: Date,
   now: Date,
+  byMinute: (index: number) => readonly number[] = () => [0, 0, 0],
 ): Record<string, unknown> {
   const config = shellyConfig(device);
   const status: Record<string, unknown> = {
@@ -116,7 +117,11 @@ export function fullStatus(
     mqtt: { connected: true },
   };
   for (const state of device.switches)
-    status[`switch:${state.index}`] = switchStatus(state, now);
+    status[`switch:${state.index}`] = switchStatus(
+      state,
+      now,
+      byMinute(state.index),
+    );
   return status;
 }
 
