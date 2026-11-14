@@ -19,6 +19,16 @@ export interface BrokerSettingsInput {
   password?: string | null;
 }
 
+/** A mérő állítható mezői; csak a megadottak változnak. */
+export interface MeterInput {
+  loadPower?: number;
+  voltage?: number;
+  currentOverride?: number | null;
+  powerFactor?: number;
+  frequency?: number;
+  energyTotalWh?: number;
+}
+
 @Injectable({ providedIn: 'root' })
 export class Api {
   private readonly http = inject(HttpClient);
@@ -48,6 +58,14 @@ export class Api {
 
   setSwitch(id: string, index: number, output: boolean): Observable<DeviceView> {
     return this.http.put<DeviceView>(`/api/devices/${id}/switches/${index}`, { output });
+  }
+
+  setMeter(id: string, index: number, patch: MeterInput): Observable<DeviceView> {
+    return this.http.put<DeviceView>(`/api/devices/${id}/switches/${index}/meter`, patch);
+  }
+
+  resetEnergy(id: string, index: number): Observable<DeviceView> {
+    return this.http.post<DeviceView>(`/api/devices/${id}/switches/${index}/meter/reset`, {});
   }
 
   messages(id: string): Observable<MqttLogEntry[]> {

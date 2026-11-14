@@ -7,12 +7,13 @@ import { Api, errorMessage } from '../core/api';
 import { DeviceStore } from '../core/device-store';
 import { EventStream } from '../core/event-stream';
 import { identity, shellyTopics, switchLabel, typeLabel } from './device-labels';
+import { MeterEditor } from './meter-editor';
 
 const LOG_LIMIT = 200;
 
 @Component({
   selector: 'app-device-detail',
-  imports: [RouterLink, DatePipe],
+  imports: [RouterLink, DatePipe, MeterEditor],
   templateUrl: './device-detail.html',
 })
 export class DeviceDetail {
@@ -33,6 +34,8 @@ export class DeviceDetail {
   /** Az üzenetnapló, legújabb elöl. */
   protected readonly messages = signal<MqttLogEntry[]>([]);
   protected readonly busy = signal(false);
+  /** A számlálók élő léptetéséhez; másodpercenként frissül. */
+  protected readonly now = signal(Date.now());
   protected readonly error = signal<string | null>(null);
 
   protected readonly typeLabel = typeLabel;
@@ -41,6 +44,8 @@ export class DeviceDetail {
 
   constructor() {
     effect(() => this.loadMessages(this.id()));
+    const timer = setInterval(() => this.now.set(Date.now()), 1000);
+    this.destroyRef.onDestroy(() => clearInterval(timer));
     this.stream
       .on('mqtt.message')
       .pipe(takeUntilDestroyed(this.destroyRef))

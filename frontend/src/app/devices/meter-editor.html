@@ -1,0 +1,137 @@
+@if (state().meter; as meter) {
+  <div class="row g-2 text-center mb-3">
+    <div class="col-4">
+      <div class="small text-secondary">Teljesítmény</div>
+      <div class="fs-5 fw-semibold">{{ formatNumber(values().power, 1) }} W</div>
+    </div>
+    <div class="col-4">
+      <div class="small text-secondary">Áramerősség</div>
+      <div class="fs-5 fw-semibold">{{ formatNumber(values().current, 3) }} A</div>
+    </div>
+    <div class="col-4">
+      <div class="small text-secondary">Számláló</div>
+      <div class="fs-5 fw-semibold text-nowrap">{{ formatEnergy(values().energy) }}</div>
+    </div>
+  </div>
+
+  <div class="row g-2">
+    <div class="col-6">
+      <label class="form-label small mb-1" [for]="fieldId('load')">Terhelés</label>
+      <div class="input-group input-group-sm has-validation">
+        <input
+          type="number"
+          class="form-control"
+          min="0"
+          max="10000"
+          step="1"
+          [id]="fieldId('load')"
+          [value]="meter.loadPower"
+          [class.is-invalid]="invalid()['loadPower']"
+          (change)="commit('loadPower', $event)"
+        />
+        <span class="input-group-text">W</span>
+        <div class="invalid-feedback">{{ invalid()['loadPower'] }}</div>
+      </div>
+    </div>
+    <div class="col-6">
+      <label class="form-label small mb-1" [for]="fieldId('voltage')">Feszültség</label>
+      <div class="input-group input-group-sm has-validation">
+        <input
+          type="number"
+          class="form-control"
+          min="0"
+          max="300"
+          step="0.1"
+          [id]="fieldId('voltage')"
+          [value]="meter.voltage"
+          [class.is-invalid]="invalid()['voltage']"
+          (change)="commit('voltage', $event)"
+        />
+        <span class="input-group-text">V</span>
+        <div class="invalid-feedback">{{ invalid()['voltage'] }}</div>
+      </div>
+    </div>
+    <div class="col-6">
+      <label class="form-label small mb-1" [for]="fieldId('current')">Áramerősség</label>
+      <div class="input-group input-group-sm has-validation">
+        <input
+          type="number"
+          class="form-control"
+          min="0"
+          max="100"
+          step="0.001"
+          placeholder="számolt"
+          [id]="fieldId('current')"
+          [value]="meter.currentOverride ?? ''"
+          [class.is-invalid]="invalid()['currentOverride']"
+          (change)="commitCurrent($event)"
+        />
+        <span class="input-group-text">A</span>
+        <div class="invalid-feedback">{{ invalid()['currentOverride'] }}</div>
+      </div>
+    </div>
+    <div class="col-3">
+      <label class="form-label small mb-1" [for]="fieldId('pf')">cos φ</label>
+      <input
+        type="number"
+        class="form-control form-control-sm"
+        min="0"
+        max="1"
+        step="0.01"
+        [id]="fieldId('pf')"
+        [value]="meter.powerFactor"
+        [class.is-invalid]="invalid()['powerFactor']"
+        (change)="commit('powerFactor', $event)"
+      />
+    </div>
+    <div class="col-3">
+      <label class="form-label small mb-1" [for]="fieldId('freq')">Hz</label>
+      <input
+        type="number"
+        class="form-control form-control-sm"
+        min="45"
+        max="65"
+        step="0.1"
+        [id]="fieldId('freq')"
+        [value]="meter.frequency"
+        [class.is-invalid]="invalid()['frequency']"
+        (change)="commit('frequency', $event)"
+      />
+    </div>
+    <div class="col-12">
+      <label class="form-label small mb-1" [for]="fieldId('energy')">Számláló beállítása</label>
+      <div class="input-group input-group-sm has-validation">
+        <input
+          type="number"
+          class="form-control"
+          min="0"
+          step="0.001"
+          placeholder="új érték"
+          [id]="fieldId('energy')"
+          [class.is-invalid]="invalid()['energyTotalWh']"
+          (change)="commit('energyTotalWh', $event)"
+        />
+        <span class="input-group-text">Wh</span>
+        <button
+          type="button"
+          class="btn btn-outline-secondary"
+          [disabled]="busy()"
+          (click)="reset()"
+        >
+          Nullázás
+        </button>
+        <div class="invalid-feedback">{{ invalid()['energyTotalWh'] }}</div>
+      </div>
+    </div>
+  </div>
+  @if (invalid()['powerFactor'] || invalid()['frequency']) {
+    <div class="small text-danger mt-1">
+      {{ invalid()['powerFactor'] ?? invalid()['frequency'] }}
+    </div>
+  }
+  @if (error(); as message) {
+    <div class="alert alert-danger small py-2 mt-2 mb-0" role="alert">{{ message }}</div>
+  }
+} @else {
+  <p class="small text-secondary mb-0">Ennek a kapcsolónak nincs fogyasztásmérője.</p>
+}
