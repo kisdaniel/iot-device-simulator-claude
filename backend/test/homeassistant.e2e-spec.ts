@@ -64,6 +64,9 @@ describe('Home Assistant konfiguráció (e2e)', () => {
     expect(doc.mqtt.switch.map((s: { name: string | null }) => s.name)).toEqual(
       [null, 'Relé 1', 'Relé 2'],
     );
+    expect(all.body.compose).toContain(
+      './homeassistant/packages:/config/packages:ro',
+    );
 
     const withDiscovered = await request(server)
       .get('/api/homeassistant/config?includeDiscovered=true')
@@ -79,15 +82,23 @@ describe('Home Assistant konfiguráció (e2e)', () => {
       .get('/api/homeassistant/config.yaml')
       .expect(200);
     expect(file.headers['content-type']).toContain('text/yaml');
-    expect(file.headers['content-disposition']).toContain(
-      'iot-simulator-homeassistant.yaml',
-    );
+    expect(file.headers['content-disposition']).toContain('iot_simulator.yaml');
     expect(file.text).toBe(
       all.body.yaml.replace(
         /Generálva: [^;]+/,
         file.text.match(/Generálva: [^;]+/)![0],
       ),
     );
+  });
+
+  it('a docker-compose.yml letölthető', async () => {
+    const res = await request(app.getHttpServer())
+      .get('/api/homeassistant/docker-compose.yml')
+      .expect(200);
+    expect(res.headers['content-type']).toContain('text/yaml');
+    expect(res.headers['content-disposition']).toContain('docker-compose.yml');
+    expect(parse(res.text).services).toHaveProperty('homeassistant');
+    expect(parse(res.text).services).toHaveProperty('mosquitto');
   });
 
   it('eszközök nélkül üres mqtt blokkot ad', async () => {
