@@ -6,7 +6,14 @@ import type { DeviceView, MqttLogEntry } from '@iot-sim/shared';
 import { Api, errorMessage } from '../core/api';
 import { DeviceStore } from '../core/device-store';
 import { EventStream } from '../core/event-stream';
-import { identity, shellyTopics, switchLabel, typeLabel } from './device-labels';
+import {
+  deviceTopics,
+  identity,
+  sensorKey,
+  switchKey,
+  switchLabel,
+  typeLabel,
+} from './device-labels';
 import { MeterEditor } from './meter-editor';
 import { TemperatureEditor } from './temperature-editor';
 
@@ -30,7 +37,7 @@ export class DeviceDetail {
   protected readonly notFound = computed(() => this.store.loaded() && !this.device());
   protected readonly topics = computed(() => {
     const device = this.device();
-    return device ? shellyTopics(device) : [];
+    return device ? deviceTopics(device) : [];
   });
   /** Az üzenetnapló, legújabb elöl. */
   protected readonly messages = signal<MqttLogEntry[]>([]);
@@ -42,6 +49,8 @@ export class DeviceDetail {
   protected readonly typeLabel = typeLabel;
   protected readonly identity = identity;
   protected readonly switchLabel = switchLabel;
+  protected readonly switchKey = switchKey;
+  protected readonly sensorKey = sensorKey;
 
   constructor() {
     effect(() => this.loadMessages(this.id()));

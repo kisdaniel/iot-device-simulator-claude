@@ -6,6 +6,7 @@ import {
   TEMPERATURE_MAX_C,
   TEMPERATURE_MIN_C,
   type TemperatureState,
+  tasmotaSensorKey,
 } from '@iot-sim/shared';
 import { Api, errorMessage } from '../core/api';
 import { DeviceStore } from '../core/device-store';
@@ -33,7 +34,13 @@ export class TemperatureEditor {
   protected readonly error = signal<string | null>(null);
   protected readonly busy = signal(false);
 
-  protected readonly componentId = computed(() => SHELLY_ADDON_FIRST_ID + this.state().index);
+  /** A hőmérő azonosítója a protokollban: temperature:100, ill. DS18B20-1. */
+  protected readonly key = computed(() => {
+    const device = this.device();
+    return device.type === 'tasmota'
+      ? tasmotaSensorKey(device.sensors.length, this.state().index)
+      : `temperature:${SHELLY_ADDON_FIRST_ID + this.state().index}`;
+  });
   protected readonly shown = computed(() => this.dragging() ?? this.state().tC ?? 0);
   protected readonly fahrenheit = computed(
     () => Math.round(((this.shown() * 9) / 5) * 10 + 320) / 10,
