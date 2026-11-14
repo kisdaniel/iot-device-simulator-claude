@@ -1,0 +1,12 @@
+.git
+.github
+.husky
+node_modules
+**/node_modules
+**/dist
+**/.angular
+data
+docs
+*.md
+docker-compose.yml
+Dockerfile
