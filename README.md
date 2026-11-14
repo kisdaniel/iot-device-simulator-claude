@@ -2,7 +2,7 @@
 
 Shelly (1PM, 2PM, Add-on; Gen2, Gen3, Gen4) és Tasmota eszközök szimulációja MQTT-n keresztül, webes kezelőfelülettel. A szimulált eszközök ugyanazokat az üzeneteket küldik és fogadják, mint a valódiak, így a rájuk épülő rendszerek hardver nélkül tesztelhetők.
 
-> **Állapot:** felvehető Shelly 1PM és 2PM (Gen2, Gen3, Gen4) opcionális Add-onnal (1–5 DS18B20), valamint Tasmota eszköz 1–8 relével, fogyasztásmérővel és 0–8 DS18B20 hőmérővel. A kapcsolók MQTT-ről és a felületről is állíthatók, a mért értékek a felületről adhatók meg. A Tasmota discovery a következő lépésben érkezik; a sorrendet a [technikai specifikáció](docs/technikai-specifikacio.md) „Megvalósítási lépések” szakasza írja le.
+> **Állapot:** felvehető Shelly 1PM és 2PM (Gen2, Gen3, Gen4) opcionális Add-onnal (1–5 DS18B20), valamint Tasmota eszköz 1–8 relével, fogyasztásmérővel, 0–8 DS18B20 hőmérővel és eszközönként bekapcsolható discoveryvel. A kapcsolók MQTT-ről és a felületről is állíthatók, a mért értékek a felületről adhatók meg. A JSON konfiguráció importja és exportja a következő lépésben érkezik; a sorrendet a [technikai specifikáció](docs/technikai-specifikacio.md) „Megvalósítási lépések” szakasza írja le.
 
 ## Dokumentáció
 
