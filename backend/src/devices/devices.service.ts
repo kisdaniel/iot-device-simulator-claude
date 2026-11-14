@@ -338,7 +338,7 @@ function normalizeAddon(addon: AddonDto | undefined): ShellyConfig['addon'] {
 }
 
 /** A FullTopic perjelre végződik; a Tasmota is így egészíti ki. */
-function normalizeFullTopic(fullTopic: string): string {
+export function normalizeFullTopic(fullTopic: string): string {
   return fullTopic.endsWith('/') ? fullTopic : `${fullTopic}/`;
 }
 
@@ -346,7 +346,7 @@ function normalizeFullTopic(fullTopic: string): string {
  * A Tasmota relék a kért számra méretezve; a meglévők állapota megmarad.
  * Az egyetlen mérő (ha van) a 0. kapcsolón él, és az egész eszközt méri.
  */
-function resizeSwitches(
+export function resizeSwitches(
   existing: readonly SwitchState[],
   count: number,
   hasEnergy: boolean,

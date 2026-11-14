@@ -33,7 +33,7 @@ export class SimulationService
   implements OnApplicationBootstrap, BeforeApplicationShutdown
 {
   private readonly logger = new Logger(SimulationService.name);
-  private readonly devices = new Map<string, SimulatedDevice>();
+  private devices = new Map<string, SimulatedDevice>();
   private readonly subscriptions: Subscription[] = [];
   private readonly warnedTypes = new Set<string>();
   private timer: NodeJS.Timeout | null = null;
@@ -153,6 +153,50 @@ export class SimulationService
     return this.view(current);
   }
 
+  /**
+   * Több eszköz cseréje egyszerre (import). Az érintett eszközök leállnak, így nem
+   * mentenek többet; a `persist` a sorban álló állapotmentések után fut. Siker esetén
+   * a törölt eszközök eltakarítják a megőrzött üzeneteiket, a többiek az új
+   * beállítással indulnak; hiba esetén a korábbi eszközök indulnak újra, és a hiba
+   * továbbmegy. A sorrend: a megmaradók a helyükön, az újak a végén.
+   */
+  async replaceDevices(
+    upserts: readonly Device[],
+    removeIds: readonly string[],
+    persist: () => Promise<void>,
+  ): Promise<DeviceView[]> {
+    const order = [...this.devices.keys()];
+    const affected = new Set([...removeIds, ...upserts.map((d) => d.id)]);
+    const stopped = new Map<string, SimulatedDevice>();
+    const now = new Date();
+    for (const id of affected) {
+      const current = this.devices.get(id);
+      if (!current) continue;
+      current.stop();
+      current.commitEnergy(now);
+      stopped.set(id, current);
+      this.devices.delete(id);
+    }
+
+    const run = this.writes.then(persist);
+    this.writes = run.catch(() => undefined);
+    try {
+      await run;
+    } catch (err) {
+      for (const device of stopped.values()) this.load(device.device);
+      this.reorder(order);
+      throw err;
+    }
+
+    for (const id of removeIds) stopped.get(id)?.remove();
+    const views = upserts.map((device) => this.load(device));
+    this.reorder([
+      ...order.filter((id) => !removeIds.includes(id)),
+      ...upserts.map((d) => d.id),
+    ]);
+    return views;
+  }
+
   /** Leállít és eltávolít egy eszközt; igazat ad, ha létezett. */
   unload(id: string): boolean {
     const existing = this.devices.get(id);
@@ -217,6 +261,19 @@ export class SimulationService
   /** Megvárja a folyamatban lévő állapotmentéseket (tesztekhez és leálláshoz). */
   flush(): Promise<void> {
     return this.writes;
+  }
+
+  /** Az eszközök sorrendje a megadott azonosítók szerint; a többi a végére kerül. */
+  private reorder(ids: readonly string[]): void {
+    const next = new Map<string, SimulatedDevice>();
+    for (const id of ids) {
+      const device = this.devices.get(id);
+      if (device) next.set(id, device);
+    }
+    for (const [id, device] of this.devices) {
+      if (!next.has(id)) next.set(id, device);
+    }
+    this.devices = next;
   }
 
   private view(device: SimulatedDevice): DeviceView {

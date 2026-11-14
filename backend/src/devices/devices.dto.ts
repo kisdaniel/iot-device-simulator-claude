@@ -33,8 +33,8 @@ import {
 } from 'class-validator';
 
 /** MQTT topic-előtag: helyettesítő, szóköz és a két végén perjel nélkül. */
-const TOPIC_PREFIX = /^(?!\/)[^\s#+]*[^\s#+/]$/;
-const TOPIC_PREFIX_MESSAGE =
+export const TOPIC_PREFIX = /^(?!\/)[^\s#+]*[^\s#+/]$/;
+export const TOPIC_PREFIX_MESSAGE =
   'a topic-előtag nem tartalmazhat szóközt, # vagy + jelet, és nem kezdődhet vagy végződhet perjellel';
 
 export class AddonDto {
@@ -98,15 +98,18 @@ export class CreateShellyDto {
   addon?: AddonDto;
 }
 
-const DEVICE_TYPES: readonly DeviceType[] = [...SHELLY_DEVICE_TYPES, 'tasmota'];
+export const DEVICE_TYPES: readonly DeviceType[] = [
+  ...SHELLY_DEVICE_TYPES,
+  'tasmota',
+];
 
 /** Tasmota topic és csoporttopic: perjel, helyettesítő és szóköz nélkül. */
-const TASMOTA_TOPIC = /^[^\s#+/]+$/;
-const TASMOTA_TOPIC_MESSAGE =
+export const TASMOTA_TOPIC = /^[^\s#+/]+$/;
+export const TASMOTA_TOPIC_MESSAGE =
   'a topic nem tartalmazhat perjelet, szóközt, # vagy + jelet';
 /** FullTopic: a %prefix% és a %topic% jelölő is kell, különben a parancs- és állapottopic összemosódik. */
-const FULL_TOPIC = /^(?=.*%prefix%)(?=.*%topic%)[^\s#+]+$/;
-const FULL_TOPIC_MESSAGE =
+export const FULL_TOPIC = /^(?=.*%prefix%)(?=.*%topic%)[^\s#+]+$/;
+export const FULL_TOPIC_MESSAGE =
   'a FullTopic tartalmazza a %prefix% és a %topic% jelölőt, szóköz, # és + nélkül';
 
 class TasmotaFieldsDto {

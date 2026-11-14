@@ -58,6 +58,47 @@ export class BrokerService {
     this.changed.next();
   }
 
+  /** A broker címe export-formában, jelszó nélkül. */
+  async exportSettings(): Promise<{ url: string; username: string | null }> {
+    const settings = await this.getSettings();
+    return {
+      url: `${settings.tls ? 'mqtts' : 'mqtt'}://${settings.host}:${settings.port}`,
+      username: settings.username,
+    };
+  }
+
+  /**
+   * Importált brokercím. Környezeti változós beállításnál figyelmen kívül marad; a
+   * jelszó a fájlban nincs, ezért a tárolt jelszó megmarad. `dryRun` esetén csak
+   * megmondja, mi történne.
+   */
+  async importSettings(
+    broker: { url: string; username?: string | null },
+    dryRun: boolean,
+  ): Promise<'unchanged' | 'updated' | 'ignored'> {
+    if (this.managedByEnv) return 'ignored';
+    const url = new URL(broker.url);
+    const tls = url.protocol === 'mqtts:';
+    const next = {
+      host: url.hostname,
+      port: url.port ? Number(url.port) : tls ? 8883 : 1883,
+      tls,
+      username: broker.username || null,
+    };
+    const current = await this.getSettings();
+    if (
+      current.host === next.host &&
+      current.port === next.port &&
+      current.tls === next.tls &&
+      current.username === next.username
+    ) {
+      return 'unchanged';
+    }
+    if (!dryRun)
+      await this.update({ ...next, username: next.username ?? undefined });
+    return 'updated';
+  }
+
   /** Próbakapcsolat a megadott beállítással, mentés nélkül. */
   async test(dto: BrokerSettingsDto): Promise<BrokerTestResult> {
     return this.tryConnect(await this.merge(dto));

@@ -13,6 +13,8 @@ const ENV_KEYS = [
   'MQTT_CLIENT_ID',
   'DATA_DIR',
   'MESSAGE_LOG_SIZE',
+  'CONFIG_FILE',
+  'CONFIG_IMPORT_MODE',
 ];
 
 /** Alkalmazás memóriabeli adatbázissal; a megadott változók felülírják a környezetet. */
