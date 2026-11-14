@@ -117,6 +117,8 @@ A követelmények azonosítója a technikai specifikációban és a tesztekben h
 | F-70 | A felület a felvett eszközökből Home Assistant MQTT-konfigurációt generál (`configuration.yaml`-ba másolható `mqtt:` blokk): kapcsolónként egy `switch`, mért értékenként és hőmérőnként egy `sensor` entitás, eszközönként csoportosítva, elérhetőséggel. | K |
 | F-71 | A konfigurációba kerülő eszközök kiválaszthatók; az eredmény előnézetben látszik, vágólapra másolható és fájlként letölthető. | K |
 | F-72 | A discoveryvel felvett Tasmota eszközök alapból kimaradnak, mert a Home Assistant már felismeri őket; kérésre bekerülnek. A generátor figyelmeztet, ha egy eszköz beállítása miatt az entitás nem kap állapotot (például kikapcsolt Shelly-értesítések). | K |
+| F-73 | A felület a konfiguráció mellé `docker-compose.yml`-t is generál egy Home Assistanttel és egy Mosquitto MQTT-brokerrel. A Home Assistant a generált konfigurációt egy rögzített útvonalról tölti be; a fájlok mentése a felhasználó dolga, a felület megmondja, melyiket hová kell menteni. | K |
+| F-74 | A compose a Home Assistant és a broker portját környezeti változóval felülírhatóvá teszi, hogy ne ütközzön a szimulátor saját brokerével. A Home Assistant MQTT-integrációját egyszer a felületén kell felvenni (broker: `mosquitto`), mert a brokerkapcsolat YAML-ből nem állítható be; a compose fejléce ezt lépésenként leírja. | K |
 
 ## Felhasználói felület
 
@@ -126,7 +128,7 @@ A felület egyoldalas Angular alkalmazás Bootstrap stílussal, négy képernyő
 | --- | --- | --- |
 | Eszközlista (kezdőlap) | Eszközönként egy kártya: név, típus, azonosító, kapcsolati állapot, kapcsolók, aktuális teljesítmény, hőmérsékletek. Fejlécben a broker állapota. | Kapcsoló átbillentése közvetlenül a kártyán; új eszköz; szűrés típusra és névre. |
 | Eszköz részletei | Kapcsolónként egy blokk: állapot, terhelés (W), feszültség (V), áramerősség (A), energiaszámláló. Hőmérőnként egy beviteli mező és csúszka. Az eszköz MQTT topicjai. Üzenetnapló. | Kapcsolás; mért értékek megadása; számláló nullázása; lekapcsolás és visszakapcsolás; szerkesztés; másolás; törlés (megerősítéssel). |
-| Home Assistant | A felvett eszközök listája jelölőnégyzetekkel, a generált YAML előnézete, darabszámok és figyelmeztetések. | Eszközök kiválasztása; discoveryvel felvett Tasmota eszközök bevonása; másolás; letöltés. |
+| Home Assistant | A felvett eszközök listája jelölőnégyzetekkel. Két fül: a generált Home Assistant konfiguráció és a `docker-compose.yml` előnézete, mindkettőn a mentés helyével. Darabszámok és figyelmeztetések. | Eszközök kiválasztása; discoveryvel felvett Tasmota eszközök bevonása; másolás; letöltés. |
 | Beállítások | Broker kapcsolati adatai, kapcsolati állapot és az utolsó hibaüzenet. | Mentés; kapcsolat tesztelése; konfiguráció exportálása és importálása JSON fájlból, előnézettel. |
 
 Az új eszköz űrlapja a típus kiválasztása után csak az adott típusra érvényes mezőket mutatja, és előnézetben kiírja a létrejövő topicokat. A mért értékek beírása Enterre vagy a mező elhagyásakor lép érvénybe; érvénytelen értéknél a mező hibát jelez, és nem megy ki üzenet.

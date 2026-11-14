@@ -398,8 +398,9 @@ Minden végpont az `/api` előtag alatt van, JSON-t fogad és ad vissza; a módo
 | PUT | `/api/devices/:id/sensors/:index` | `{ tC: number or null, error? }` | Hőmérő értéke |
 | GET | `/api/devices/:id/messages` | – | Az utolsó 200 MQTT-üzenet |
 | GET | `/api/events` | – | SSE eseményfolyam |
-| GET | `/api/homeassistant/config` | – | Home Assistant MQTT-konfiguráció: `{ yaml, deviceCount, entityCount, warnings }`; szűrés: `?ids=a,b`, `?includeDiscovered=true` |
-| GET | `/api/homeassistant/config.yaml` | – | Ugyanaz a YAML letölthető fájlként (`text/yaml`, `Content-Disposition: attachment`) |
+| GET | `/api/homeassistant/config` | – | Home Assistant MQTT-konfiguráció és a hozzá tartozó compose: `{ yaml, compose, deviceCount, entityCount, warnings }`; szűrés: `?ids=a,b`, `?includeDiscovered=true` |
+| GET | `/api/homeassistant/config.yaml` | – | Ugyanaz a YAML letölthető fájlként (`iot_simulator.yaml`, `text/yaml`, `Content-Disposition: attachment`) |
+| GET | `/api/homeassistant/docker-compose.yml` | – | Home Assistant és Mosquitto compose-fájl letöltésre; nem függ a kiválasztástól |
 
 Konfiguráció és üzemeltetés:
 
@@ -639,14 +640,31 @@ Az importot és az exportot a backend `ConfigIoModule` modulja végzi; ugyanazt 
 
 ### Home Assistant konfiguráció
 
-A generátor (`buildHomeAssistantConfig`) `configuration.yaml`-ba másolható `mqtt:` blokkot ad, `switch` és `sensor` listával. Nem discovery-üzeneteket küld: a konfiguráció a felhasználó kezében marad, és a Shelly eszközökhöz amúgy sem tartozik MQTT-discovery (a Home Assistant Shelly integrációja HTTP-n és websocketen beszél). Minden entitás `unique_id`-t (`iotsim_<eszköz>_<elem>`), `device` blokkot (azonosító, gyártó, modell) és `availability` beállítást kap, így a Home Assistant eszközönként csoportosítja őket.
+A generátor (`buildHomeAssistantConfig`) `configuration.yaml`-ba másolható `mqtt:` blokkot ad, `switch` és `sensor` listával. Nem discovery-üzeneteket küld: a konfiguráció a felhasználó kezében marad, és a Shelly eszközökhöz amúgy sem tartozik MQTT-discovery (a Home Assistant Shelly integrációja HTTP-n és websocketen beszél). Minden entitás `unique_id`-t (`iotsim_<eszköz>_<elem>`), `device` blokkot (azonosító, gyártó, modell) és `availability` beállítást kap, így a Home Assistant eszközönként csoportosítja őket. Az entitás neve az eszközhöz képest relatív, mert a Home Assistant az eszköz nevét eléteszi: egykimenetes kapcsolónál `null` (az entitás csak az eszköz nevét kapja, pl. `switch.bojler`), többnél `Kimenet 2` vagy `Relé 1`, a szenzoroknál `Teljesítmény`, `Kimenet 1 energia`, `Hőmérő 1`, `DS18B20-2`.
 
 | Eszköz | Kapcsoló (`switch`) | Szenzorok (`sensor`) | Elérhetőség |
 | --- | --- | --- | --- |
 | Shelly | Parancs: `<prefix>/command/switch:N` (`on`/`off`), ha az `enableControl` be van kapcsolva, különben `<deviceId>/rpc` `Switch.Set` JSON-nal. Állapot: `<prefix>/status/switch:N` → `output`; ha csak `rpcNtf` él, az `events/rpc` `NotifyStatus` üzenetéből, védett sablonnal. Ha egyik értesítés sincs: `optimistic`, figyelmeztetéssel. | `apower` (W), `voltage` (V), `current` (A), `aenergy.total` (Wh, `total_increasing`); Add-on: `temperature:<id>` → `tC` (°C) | `<prefix>/online`: `true`/`false` |
 | Tasmota | `cmnd/<t>/POWERn` és `stat/<t>/POWERn`, `ON`/`OFF` | `tele/<t>/SENSOR`: `ENERGY.Power`, `Voltage`, `Current`, `Total` és `Today` (kWh); `DS18B20-n.Temperature` (°C) | `tele/<t>/LWT`: `Online`/`Offline` |
 
-A sablonok hiányzó kulcsnál a `this.state` értéket tartják meg, mert ugyanazon a topicon más szerkezetű üzenet is jöhet. A YAML 1.1 szerint íródik (`version: '1.1'`), hogy az `on`, `off`, `ON`, `OFF` értékek idézőjelet kapjanak: a Home Assistant YAML-olvasója ezeket különben logikai értékké alakítaná. A discoveryvel felvett Tasmota eszközök alapból kimaradnak, mert a Home Assistant Tasmota integrációja már létrehozta az entitásaikat.
+A sablonok hiányzó kulcsnál üres szöveget adnak, mert ugyanazon a topicon más szerkezetű üzenet is jöhet: a Home Assistant az üres értéket figyelmen kívül hagyja, és az állapot marad. A `this.state` itt nem jó, mert amíg nincs érték, `unknown`, és azt a számszenzor hibaként naplózza. A YAML 1.1 szerint íródik (`version: '1.1'`), hogy az `on`, `off`, `ON`, `OFF` értékek idézőjelet kapjanak: a Home Assistant YAML-olvasója ezeket különben logikai értékké alakítaná. A discoveryvel felvett Tasmota eszközök alapból kimaradnak, mert a Home Assistant Tasmota integrációja már létrehozta az entitásaikat.
+
+**Docker Compose.** A `buildHomeAssistantCompose` egy `docker-compose.yml`-t ad két szolgáltatással; a mentés a felhasználó dolga, a felület és a fájl fejléce megadja az útvonalakat:
+
+```text
+<mappa>/
+  docker-compose.yml
+  homeassistant/packages/iot_simulator.yaml   ← a generált Home Assistant konfiguráció
+```
+
+| Szolgáltatás | Kép | Port | Konfiguráció |
+| --- | --- | --- | --- |
+| `mosquitto` | `eclipse-mosquitto:2` | `${MQTT_PORT:-1883}:1883` | Beágyazott `mosquitto.conf` (`configs.content`): névtelen kapcsolódás, perzisztencia a `mosquitto-data` kötetben |
+| `homeassistant` | `ghcr.io/home-assistant/home-assistant:stable` | `${HA_PORT:-8123}:8123` | Beágyazott `configuration.yaml` (`default_config` + `packages: !include_dir_named packages`); a `./homeassistant/packages` mappa csak olvashatóan a `/config/packages` alá kerül; `/config` a `homeassistant-config` kötetben; `TZ` a szerver időzónája, felülírható |
+
+A generált konfiguráció csomagként töltődik be, ezért változtatás nélkül, a saját `mqtt:` kulcsával használható. A mappát csatoljuk, nem a fájlt: ha a fájl még hiányzik, a Home Assistant akkor is elindul. A beágyazott tartalomhoz Docker Compose 2.23.1 vagy újabb kell, és benne a `$` jelet a generátor `$$`-ra cseréli, mert a Compose változóként értené. A Home Assistant MQTT-brokerének címe YAML-ből nem adható meg, ezért az integrációt egyszer a felületen kell felvenni (broker `mosquitto`, port 1883). A szimulátornak ugyanehhez a brokerhez kell kapcsolódnia; ha a saját Mosquittója foglalja az 1883-as portot, a compose `MQTT_PORT=1884` értékkel indítható.
+
+A generált fájlokat valódi Home Assistant (2026.2) példánnyal ellenőriztük a szimulátor brokerén: mind a 24 próbaentitás létrejött, a szimulátorban végzett kapcsolás és a mért értékek megjelentek, a Home Assistantből indított kapcsolás pedig a szimulátorban.
 
 ### Tesztelés
 
@@ -667,7 +685,7 @@ A protokolltesztekhez szükséges referenciaforgalmat egy valódi Plus 1PM, egy 
 4. **Mérési modell.** Fogyasztásmérés Shelly eszközön, percenkénti `aenergy`, mérővezérlő a felületen.
 5. **Add-on.** `temperature:<id>` komponensek, `Temperature.GetStatus`, hőmérővezérlő.
 6. **Tasmota.** `POWER`, `STATE`, `SENSOR`, `STATUS`, `TelePeriod`, több relé, DS18B20 hőmérők, discovery.
-7. **Kiegészítők.** Üzenetnapló, másolás, JSON import és export, kiesés szimulációja, `toggle_after`, szenzorhiba, Home Assistant konfiguráció generálása.
+7. **Kiegészítők.** Üzenetnapló, másolás, JSON import és export, kiesés szimulációja, `toggle_after`, szenzorhiba, Home Assistant konfiguráció és docker-compose generálása.
 8. **Lezárás.** Protokolltesztek valós forgalom alapján, végponti próba, README.
 
 ## Verziókezelés és commit-szabályok
