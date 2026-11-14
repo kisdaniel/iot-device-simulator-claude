@@ -398,6 +398,8 @@ Minden végpont az `/api` előtag alatt van, JSON-t fogad és ad vissza; a módo
 | PUT | `/api/devices/:id/sensors/:index` | `{ tC: number or null, error? }` | Hőmérő értéke |
 | GET | `/api/devices/:id/messages` | – | Az utolsó 200 MQTT-üzenet |
 | GET | `/api/events` | – | SSE eseményfolyam |
+| GET | `/api/homeassistant/config` | – | Home Assistant MQTT-konfiguráció: `{ yaml, deviceCount, entityCount, warnings }`; szűrés: `?ids=a,b`, `?includeDiscovered=true` |
+| GET | `/api/homeassistant/config.yaml` | – | Ugyanaz a YAML letölthető fájlként (`text/yaml`, `Content-Disposition: attachment`) |
 
 Konfiguráció és üzemeltetés:
 
@@ -438,6 +440,7 @@ A protokollismeret a profilokban van, minden más réteg protokollfüggetlen: ú
 | `DevicesModule` | REST kontroller, DTO-k, üzleti szabályok (egyediség, validáció); a műveleteket a szimulációs rétegnek adja tovább |
 | `SimulationModule` | Futó eszközpéldányok nyilvántartása, a közös MQTT kliens, topic-útválasztás, időzítők, mérési modell |
 | `EventsModule` | Belső eseménybusz (RxJS `Subject`) és az SSE végpont |
+| `HomeAssistantModule` | Home Assistant MQTT-konfiguráció generálása a futó eszközök állapotából (lásd lent) |
 
 A profil az egyetlen hely, ahol topic és üzenetformátum szerepel:
 
@@ -473,7 +476,7 @@ interface ProfileContext {
 
 | Elem | Tartalom |
 | --- | --- |
-| Útvonalak | `/` eszközlista, `/devices/new`, `/devices/:id`, `/devices/:id/edit`, `/settings` |
+| Útvonalak | `/` eszközlista, `/devices/new`, `/devices/:id`, `/devices/:id/edit`, `/homeassistant`, `/settings` |
 | `DeviceStore` | Signal-alapú tár: az eszközök térképe azonosító szerint; induláskor REST-ből tölt, utána az SSE eseményekből frissül |
 | `ApiService` | Típusos `HttpClient` hívások a fenti végpontokra |
 | `EventStreamService` | `EventSource` az `/api/events` címre, megszakadás után teljes újratöltéssel |
@@ -482,6 +485,7 @@ interface ProfileContext {
 | `DeviceFormComponent` | Reactive Forms, típusfüggő mezők, topic-előnézet |
 | `SwitchControl`, `MeterControl`, `TemperatureControl` | Újrahasználható vezérlők a listán és a részletezőn |
 | `BrokerSettingsComponent` | Brokerűrlap és kapcsolatteszt |
+| `HomeAssistantPage` | Eszközválasztás, YAML-előnézet, másolás és letöltés; minden változásra újra lekéri a konfigurációt |
 
 A kapcsoló a felületen nem optimista: a kattintás REST-hívást indít, és a megjelenített állapot a visszajövő `device.updated` eseményből változik. Így a felület mindig azt mutatja, amit az eszköz ténylegesen közzétett.
 
@@ -633,6 +637,17 @@ Az import és az export ugyanazt a formátumot használja, így az exportált f�
 
 Az importot és az exportot a backend `ConfigIoModule` modulja végzi; ugyanazt a kódot hívja az indításkori betöltés és a REST végpont.
 
+### Home Assistant konfiguráció
+
+A generátor (`buildHomeAssistantConfig`) `configuration.yaml`-ba másolható `mqtt:` blokkot ad, `switch` és `sensor` listával. Nem discovery-üzeneteket küld: a konfiguráció a felhasználó kezében marad, és a Shelly eszközökhöz amúgy sem tartozik MQTT-discovery (a Home Assistant Shelly integrációja HTTP-n és websocketen beszél). Minden entitás `unique_id`-t (`iotsim_<eszköz>_<elem>`), `device` blokkot (azonosító, gyártó, modell) és `availability` beállítást kap, így a Home Assistant eszközönként csoportosítja őket.
+
+| Eszköz | Kapcsoló (`switch`) | Szenzorok (`sensor`) | Elérhetőség |
+| --- | --- | --- | --- |
+| Shelly | Parancs: `<prefix>/command/switch:N` (`on`/`off`), ha az `enableControl` be van kapcsolva, különben `<deviceId>/rpc` `Switch.Set` JSON-nal. Állapot: `<prefix>/status/switch:N` → `output`; ha csak `rpcNtf` él, az `events/rpc` `NotifyStatus` üzenetéből, védett sablonnal. Ha egyik értesítés sincs: `optimistic`, figyelmeztetéssel. | `apower` (W), `voltage` (V), `current` (A), `aenergy.total` (Wh, `total_increasing`); Add-on: `temperature:<id>` → `tC` (°C) | `<prefix>/online`: `true`/`false` |
+| Tasmota | `cmnd/<t>/POWERn` és `stat/<t>/POWERn`, `ON`/`OFF` | `tele/<t>/SENSOR`: `ENERGY.Power`, `Voltage`, `Current`, `Total` és `Today` (kWh); `DS18B20-n.Temperature` (°C) | `tele/<t>/LWT`: `Online`/`Offline` |
+
+A sablonok hiányzó kulcsnál a `this.state` értéket tartják meg, mert ugyanazon a topicon más szerkezetű üzenet is jöhet. A YAML 1.1 szerint íródik (`version: '1.1'`), hogy az `on`, `off`, `ON`, `OFF` értékek idézőjelet kapjanak: a Home Assistant YAML-olvasója ezeket különben logikai értékké alakítaná. A discoveryvel felvett Tasmota eszközök alapból kimaradnak, mert a Home Assistant Tasmota integrációja már létrehozta az entitásaikat.
+
 ### Tesztelés
 
 | Szint | Mit ellenőriz | Eszköz |
@@ -652,7 +667,7 @@ A protokolltesztekhez szükséges referenciaforgalmat egy valódi Plus 1PM, egy 
 4. **Mérési modell.** Fogyasztásmérés Shelly eszközön, percenkénti `aenergy`, mérővezérlő a felületen.
 5. **Add-on.** `temperature:<id>` komponensek, `Temperature.GetStatus`, hőmérővezérlő.
 6. **Tasmota.** `POWER`, `STATE`, `SENSOR`, `STATUS`, `TelePeriod`, több relé, DS18B20 hőmérők, discovery.
-7. **Kiegészítők.** Üzenetnapló, másolás, JSON import és export, kiesés szimulációja, `toggle_after`, szenzorhiba.
+7. **Kiegészítők.** Üzenetnapló, másolás, JSON import és export, kiesés szimulációja, `toggle_after`, szenzorhiba, Home Assistant konfiguráció generálása.
 8. **Lezárás.** Protokolltesztek valós forgalom alapján, végponti próba, README.
 
 ## Verziókezelés és commit-szabályok
