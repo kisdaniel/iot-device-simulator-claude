@@ -107,7 +107,7 @@ A követelmények azonosítója a technikai specifikációban és a tesztekben h
 | F-61 | Indításkor az eszközlista külső JSON fájlból importálható; a fájl útvonala és az import módja környezeti változó. | K |
 | F-62 | Az import három módot ismer: csak üres adatbázisba tölt, összefésül a meglévő eszközökkel, vagy teljesen lecseréli az eszközlistát. | K |
 | F-63 | A teljes konfiguráció a felületről JSON fájlba exportálható, választhatóan a pillanatnyi állapottal együtt; az exportált fájl változtatás nélkül visszatölthető. A broker jelszava nem kerül bele. | K |
-| F-64 | JSON fájl a felületről is importálható; a felület az írás előtt megmutatja, hány eszköz jön létre, frissül és törlődik. | K |
+| F-64 | JSON fájl a felületről is importálható összefésüléssel vagy cserével; a felület az írás előtt megmutatja, mely eszközök jönnek létre, frissülnek, törlődnek és maradnak változatlanok, és csak megerősítés után ír. A csak üres adatbázisba töltés az indításkori import módja. | K |
 | F-65 | Hibás fájl esetén semmi nem változik, és a hibaüzenet megnevezi a hibás eszközt és mezőt. | K |
 
 ### Home Assistant konfiguráció

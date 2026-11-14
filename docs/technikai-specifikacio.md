@@ -406,8 +406,8 @@ Konfiguráció és üzemeltetés:
 
 | Metódus | Útvonal | Törzs | Leírás |
 | --- | --- | --- | --- |
-| GET | `/api/config/export?includeState=true` | – | A teljes konfiguráció letölthető JSON fájlként (`Content-Disposition: attachment`); `includeState=false` esetén állapot nélkül |
-| POST | `/api/config/import?mode=merge` | a JSON konfiguráció | Import `merge` vagy `replace` módban; válasz: `{ created, updated, removed }`; hibás fájlra 400 mezőszintű hibalistával |
+| GET | `/api/config/export?includeState=true` | – | A teljes konfiguráció letölthető JSON fájlként (`iot-simulator-config-<dátum>.json`, `Content-Disposition: attachment`); alapból állapottal, `includeState=false` esetén nélküle |
+| POST | `/api/config/import?mode=merge` | a JSON konfiguráció | Import `merge` (alapérték), `replace` vagy `seed` módban; válasz: `{ mode, applied, skipped, created, updated, unchanged, removed, broker }`, az eszközök nevével, típusával és azonosítójával; hibás fájlra 400: `{ message, errors: [{ path, device, message }] }` |
 | POST | `/api/config/import?mode=merge&dryRun=true` | mint fent | Csak ellenőrzés és összesítés, írás nélkül; a felület ezzel mutat előnézetet |
 | GET | `/api/health` | – | `{ status, mqtt }`; a Docker egészség-ellenőrzése hívja |
 
@@ -442,6 +442,7 @@ A protokollismeret a profilokban van, minden más réteg protokollfüggetlen: ú
 | `SimulationModule` | Futó eszközpéldányok nyilvántartása, a közös MQTT kliens, topic-útválasztás, időzítők, mérési modell |
 | `EventsModule` | Belső eseménybusz (RxJS `Subject`) és az SSE végpont |
 | `HomeAssistantModule` | Home Assistant MQTT-konfiguráció generálása a futó eszközök állapotából (lásd lent) |
+| `ConfigIoModule` | JSON konfiguráció exportja és importja, az indításkori betöltés (`CONFIG_FILE`) |
 
 A profil az egyetlen hely, ahol topic és üzenetformátum szerepel:
 
@@ -486,6 +487,7 @@ interface ProfileContext {
 | `DeviceFormComponent` | Reactive Forms, típusfüggő mezők, topic-előnézet |
 | `SwitchControl`, `MeterControl`, `TemperatureControl` | Újrahasználható vezérlők a listán és a részletezőn |
 | `BrokerSettingsComponent` | Brokerűrlap és kapcsolatteszt |
+| `ConfigTransfer` | A Beállítások oldalon: export (állapottal vagy anélkül), import fájlválasztással, móddal (összefésülés vagy csere), előnézettel és mezőszintű hibalistával |
 | `HomeAssistantPage` | Eszközválasztás, YAML-előnézet, másolás és letöltés; minden változásra újra lekéri a konfigurációt |
 
 A kapcsoló a felületen nem optimista: a kattintás REST-hívást indít, és a megjelenített állapot a visszajövő `device.updated` eseményből változik. Így a felület mindig azt mutatja, amit az eszköz ténylegesen közzétett.
@@ -578,11 +580,12 @@ services:
       - "3000:3000"
     environment:
       MQTT_URL: mqtt://mosquitto:1883
-      CONFIG_FILE: /config/devices.json
-      CONFIG_IMPORT_MODE: seed
+      # Példa eszközök az első induláskor (seed: csak üres adatbázisba tölt).
+      # CONFIG_FILE: /config/devices.json
+      # CONFIG_IMPORT_MODE: seed
     volumes:
       - simulator-data:/data
-      - ./config:/config:ro
+      # - ./config:/config:ro
 
 volumes:
   mosquitto-data:
@@ -629,10 +632,15 @@ Az import és az export ugyanazt a formátumot használja, így az exportált f�
 }
 ```
 
-- **Kötelező mezők.** `version`, eszközönként `name`, `type` és az azonosító (`shelly.deviceId`, ill. `tasmota.topic`). Minden más elhagyható, és az adatmodell alapértékét kapja; a `switches` és `sensors` tömb a kezdő állapotot adja meg.
+- **Kötelező mezők.** `version`, eszközönként `name`, `type` és az azonosító (`shelly.deviceId`, ill. `tasmota.topic`); Shellynél a `generation` is. A fájlbeli eszköz teljes leírás: a hiányzó beállítás az alapértéket kapja (Tasmota: 1 relé, mérő és hőmérő nélkül), frissítésnél is. A `switches` és `sensors` tömb a kezdő vagy pillanatnyi állapotot adja meg; ha hiányzik, frissítésnél a meglévő állapot marad. Ismeretlen mező hibának számít, hogy az elgépelés ne maradjon észrevétlen; egy fájlban legfeljebb 500 eszköz lehet.
+- **Shelly azonosító.** A `deviceId` a típus és a generáció előtagjából és a MAC-címből áll (pl. `shelly1pmg3-a8032abe54dc`); ha nem illik a típushoz és a generációhoz, az import hibát ad.
+- **Állapot.** Kapcsolónként `output` és a mérő mezői (`loadPower`, `voltage`, `currentOverride`, `powerFactor`, `frequency`, `energyTotalWh`, `energyTodayWh`, `energyYesterdayWh`); hőmérőnként `address`, `tC` és `error`. Mérő csak mérővel rendelkező kapcsolón adható meg (Tasmotánál a 0. kapcsolón, ha `hasEnergy`); nem létező sorszám hibát ad. A hőmérő címe állapot nélküli exportban is szerepel, mert az azonosítja a hőmérőt.
 - **Azonosítás.** Az eszközt importáláskor a Shelly `deviceId`, ill. a Tasmota `topic` azonosítja, nem a név.
 - **Módok.** `seed`: csak akkor tölt, ha az adatbázisban még nincs eszköz. `merge`: a fájlban szereplő eszközöket létrehozza vagy frissíti, a többit békén hagyja. `replace`: az adatbázis eszközlistája pontosan a fájl tartalma lesz, a fájlban nem szereplő eszközök törlődnek.
+- **Ütközések.** A fájl eszközei egymással és a megmaradó eszközökkel (`merge` módban a fájlban nem szereplőkkel) sem ütközhetnek: egyedi a Shelly eszközazonosító és topic-előtag, valamint a Tasmota topic és parancstopic.
 - **Atomi működés.** A fájl egésze validálódik a DTO-szabályokkal, és egy tranzakcióban íródik be; hiba esetén semmi nem változik. Indításkori importnál a hibás fájl leállítja a folyamatot, a hibaüzenet megnevezi az eszköz sorszámát és a mezőt.
+- **Végrehajtás.** Előbb terv készül (létrejön, frissül, változatlan, törlődik); a `dryRun` ezt adja vissza írás nélkül. Íráskor az érintett eszközök leállnak, a tranzakció a sorban álló állapotmentések után fut, így régi állapot nem írhatja felül az importáltat. Siker után a törölt eszközök eltakarítják a megőrzött üzeneteiket, a többiek az új beállítással indulnak; hiba esetén a korábbi eszközök indulnak újra. A változatlan eszközökhöz az import nem nyúl. A megmaradó eszközök a helyükön maradnak, az újak a lista végére kerülnek. Egyszerre egy import fut.
+- **Broker.** A `broker` szakasz (`url`, `username`) környezeti változós beállításnál (`MQTT_URL`) figyelmen kívül marad; különben frissíti a tárolt beállítást, és a tárolt jelszó megmarad.
 - **Export.** Az export tartalmazza az összes eszközt teljes konfigurációval; a pillanatnyi állapot (kapcsolók, mért értékek, számlálók, hőmérsékletek) kérhető vagy elhagyható. A broker jelszava soha nem kerül a fájlba.
 - **Verzió.** Ismeretlen `version` értékre az import hibát ad; a formátum változásakor a szám nő, és a régi fájlokat a betöltő alakítja át.
 
