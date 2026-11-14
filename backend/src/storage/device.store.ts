@@ -78,13 +78,21 @@ export class DeviceStore {
     }
   }
 
-  /** Az eszköz sorai és a hőmérők teljes cseréje (pl. az Add-on átállítása után). */
-  async updateWithSensors(device: Device): Promise<void> {
+  /**
+   * Az eszköz sora, valamint a kapcsolók és a hőmérők teljes cseréje
+   * (pl. az Add-on vagy a relék számának átállítása után).
+   */
+  async updateWithChildren(device: Device): Promise<void> {
     await this.dataSource.transaction(async (manager) => {
       await manager.update(
         DeviceEntity,
         { id: device.id },
         { ...deviceColumns(device), updatedAt: new Date().toISOString() },
+      );
+      await manager.delete(SwitchEntity, { deviceId: device.id });
+      await manager.insert(
+        SwitchEntity,
+        device.switches.map((s) => toSwitchEntity(device.id, s)),
       );
       await manager.delete(TemperatureSensorEntity, { deviceId: device.id });
       if (device.sensors.length > 0) {

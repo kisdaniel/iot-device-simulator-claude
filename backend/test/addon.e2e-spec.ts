@@ -21,30 +21,49 @@ describe('Shelly Add-on hőmérők (e2e)', () => {
 
   async function startApp(env: Record<string, string> = {}): Promise<void> {
     app = await createApp({ MQTT_URL: broker.url, ...env });
-    await waitFor(() => app.get(MqttGateway).isConnected, 'a közös kapcsolat felépül');
+    await waitFor(
+      () => app.get(MqttGateway).isConnected,
+      'a közös kapcsolat felépül',
+    );
   }
 
   async function createDevice(addon: object | undefined): Promise<DeviceView> {
     const res = await request(app.getHttpServer())
       .post('/api/devices')
-      .send({ name: 'Kazán', type: 'shelly-2pm', shelly: { generation: 3, mac: MAC, addon } })
+      .send({
+        name: 'Kazán',
+        type: 'shelly-2pm',
+        shelly: { generation: 3, mac: MAC, addon },
+      })
       .expect(201);
     return res.body as DeviceView;
   }
 
   function sensor(device: DeviceView, index: number, body: object) {
-    return request(app.getHttpServer()).put(`/api/devices/${device.id}/sensors/${index}`).send(body);
+    return request(app.getHttpServer())
+      .put(`/api/devices/${device.id}/sensors/${index}`)
+      .send(body);
   }
 
   function received(topic: string): Array<Record<string, unknown>> {
-    return inbox.filter((m) => m.topic === topic).map((m) => JSON.parse(m.payload));
+    return inbox
+      .filter((m) => m.topic === topic)
+      .map((m) => JSON.parse(m.payload));
   }
 
-  async function rpc(method: string, params?: object): Promise<Record<string, unknown>> {
+  async function rpc(
+    method: string,
+    params?: object,
+  ): Promise<Record<string, unknown>> {
     const id = Math.floor(Math.random() * 1e9);
     await control.publishAsync(
       `${ID}/rpc`,
-      JSON.stringify({ id, src: 'teszt', method, ...(params ? { params } : {}) }),
+      JSON.stringify({
+        id,
+        src: 'teszt',
+        method,
+        ...(params ? { params } : {}),
+      }),
     );
     let response: Record<string, unknown> | undefined;
     await waitFor(() => {
@@ -58,7 +77,9 @@ describe('Shelly Add-on hőmérők (e2e)', () => {
     broker = await new TestBroker().start();
     control = await connectAsync(broker.url);
     inbox = [];
-    control.on('message', (topic, payload) => inbox.push({ topic, payload: payload.toString() }));
+    control.on('message', (topic, payload) =>
+      inbox.push({ topic, payload: payload.toString() }),
+    );
     await control.subscribeAsync('#');
   });
 
@@ -77,17 +98,29 @@ describe('Shelly Add-on hőmérők (e2e)', () => {
       [1, 21.5, null],
       [2, 21.5, null],
     ]);
-    for (const s of device.sensors) expect(isValidDs18b20Address(s.address)).toBe(true);
+    for (const s of device.sensors)
+      expect(isValidDs18b20Address(s.address)).toBe(true);
 
     await waitFor(
       () => received(`${ID}/status/temperature:102`).length > 0,
       'status/temperature:102 induláskor',
     );
-    expect(received(`${ID}/status/temperature:100`)[0]).toEqual({ id: 100, tC: 21.5, tF: 70.7 });
+    expect(received(`${ID}/status/temperature:100`)[0]).toEqual({
+      id: 100,
+      tC: 21.5,
+      tF: 70.7,
+    });
 
-    const status = (await rpc('Shelly.GetStatus')).result as Record<string, unknown>;
+    const status = (await rpc('Shelly.GetStatus')).result as Record<
+      string,
+      unknown
+    >;
     expect(Object.keys(status)).toEqual(
-      expect.arrayContaining(['temperature:100', 'temperature:101', 'temperature:102']),
+      expect.arrayContaining([
+        'temperature:100',
+        'temperature:101',
+        'temperature:102',
+      ]),
     );
     expect(status).not.toHaveProperty('temperature:103');
   });
@@ -99,7 +132,10 @@ describe('Shelly Add-on hőmérők (e2e)', () => {
     const res = await sensor(device, 1, { tC: 48.26 }).expect(200);
     expect(res.body.sensors[1].tC).toBe(48.3);
 
-    await waitFor(() => received(`${ID}/events/rpc`).length > 0, 'NotifyStatus');
+    await waitFor(
+      () => received(`${ID}/events/rpc`).length > 0,
+      'NotifyStatus',
+    );
     expect(received(`${ID}/events/rpc`)[0]).toMatchObject({
       method: 'NotifyStatus',
       params: { 'temperature:101': { id: 101, tC: 48.3, tF: 118.9 } },
@@ -122,8 +158,13 @@ describe('Shelly Add-on hőmérők (e2e)', () => {
     const peripherals = (await rpc('SensorAddon.GetPeripherals')).result as {
       ds18b20: Record<string, { addr: string }>;
     };
-    expect(Object.keys(peripherals.ds18b20)).toEqual(['temperature:100', 'temperature:101']);
-    expect(peripherals.ds18b20['temperature:100'].addr).toMatch(/^40(:\d{1,3}){7}$/);
+    expect(Object.keys(peripherals.ds18b20)).toEqual([
+      'temperature:100',
+      'temperature:101',
+    ]);
+    expect(peripherals.ds18b20['temperature:100'].addr).toMatch(
+      /^40(:\d{1,3}){7}$/,
+    );
   });
 
   it('szenzorhibánál nincs érték, a hiba megszűnésével visszaáll', async () => {
@@ -148,7 +189,9 @@ describe('Shelly Add-on hőmérők (e2e)', () => {
     expect(device.sensors).toEqual([]);
     expect(device.shelly!.addon).toEqual({ enabled: false, sensorCount: 0 });
     await sensor(device, 0, { tC: 20 }).expect(404);
-    expect(await rpc('SensorAddon.GetPeripherals')).toMatchObject({ error: { code: 404 } });
+    expect(await rpc('SensorAddon.GetPeripherals')).toMatchObject({
+      error: { code: 404 },
+    });
   });
 
   it('az Add-on utólag bekapcsolható és átméretezhető; a meglévő értékek megmaradnak', async () => {
@@ -173,7 +216,9 @@ describe('Shelly Add-on hőmérők (e2e)', () => {
         .patch(`/api/devices/${device.id}`)
         .send({ shelly: { addon: { enabled: true, sensorCount: 3 } } })
         .expect(200);
-      expect(grown.body.sensors.map((s: { tC: number }) => s.tC)).toEqual([-12.5, 21.5, 21.5]);
+      expect(grown.body.sensors.map((s: { tC: number }) => s.tC)).toEqual([
+        -12.5, 21.5, 21.5,
+      ]);
       expect(grown.body.sensors[0].address).toBe(on.body.sensors[0].address);
 
       // Újraindítás után is megmarad.
@@ -182,7 +227,9 @@ describe('Shelly Add-on hőmérők (e2e)', () => {
       const after = await request(app.getHttpServer())
         .get(`/api/devices/${device.id}`)
         .expect(200);
-      expect(after.body.sensors.map((s: { tC: number }) => s.tC)).toEqual([-12.5, 21.5, 21.5]);
+      expect(after.body.sensors.map((s: { tC: number }) => s.tC)).toEqual([
+        -12.5, 21.5, 21.5,
+      ]);
 
       const off = await request(app.getHttpServer())
         .patch(`/api/devices/${device.id}`)
@@ -206,12 +253,22 @@ describe('Shelly Add-on hőmérők (e2e)', () => {
     ]) {
       await request(server)
         .post('/api/devices')
-        .send({ name: 'X', type: 'shelly-1pm', shelly: { generation: 3, addon } })
+        .send({
+          name: 'X',
+          type: 'shelly-1pm',
+          shelly: { generation: 3, addon },
+        })
         .expect(400);
     }
 
     const device = await createDevice({ enabled: true, sensorCount: 1 });
-    for (const body of [{ tC: -56 }, { tC: 126 }, { tC: 'meleg' }, { error: 'zárlat' }, { x: 1 }]) {
+    for (const body of [
+      { tC: -56 },
+      { tC: 126 },
+      { tC: 'meleg' },
+      { error: 'zárlat' },
+      { x: 1 },
+    ]) {
       await sensor(device, 0, body).expect(400);
     }
   });

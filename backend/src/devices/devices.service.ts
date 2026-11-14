@@ -2,11 +2,16 @@ import { randomBytes, randomUUID } from 'node:crypto';
 import {
   type Device,
   type DeviceView,
+  defaultTasmotaTopic,
   type MqttLogEntry,
   SHELLY_SWITCH_COUNT,
   type ShellyConfig,
   shellyDeviceId,
   shellyTopicPrefix,
+  type SwitchState,
+  TASMOTA_DEFAULTS,
+  type TasmotaConfig,
+  tasmotaTopic,
 } from '@iot-sim/shared';
 import {
   BadRequestException,
@@ -26,6 +31,8 @@ import type {
   SetMeterDto,
   SetSensorDto,
   UpdateDeviceDto,
+  UpdateShellyDto,
+  UpdateTasmotaDto,
 } from './devices.dto.js';
 
 /** Eszközkezelés: a tárolás és a futó szimuláció összehangolása. */
@@ -49,10 +56,43 @@ export class DevicesService {
   }
 
   async create(dto: CreateDeviceDto): Promise<DeviceView> {
+    const mac = randomBytes(6).toString('hex');
+    const device =
+      dto.type === 'tasmota'
+        ? this.newTasmota(dto, mac)
+        : this.newShelly(dto, mac);
+    await this.store.insert(device);
+    return this.publish(this.simulation.load(device));
+  }
+
+  async update(id: string, dto: UpdateDeviceDto): Promise<DeviceView> {
+    const current = this.get(id);
+    const { status: _status, ...device } = structuredClone(current);
+    if (dto.name !== undefined) device.name = dto.name.trim();
+    if (dto.shelly) this.applyShelly(device, dto.shelly);
+    if (dto.tasmota) this.applyTasmota(device, dto.tasmota);
+
+    const structure = (d: Device) =>
+      JSON.stringify([
+        d.switches.map((s) => [s.index, s.meter !== undefined]),
+        d.sensors,
+      ]);
+    if (structure(device) !== structure(current)) {
+      await this.store.updateWithChildren(device);
+    } else {
+      await this.store.update(device);
+    }
+    return this.publish(this.simulation.reconfigure(device));
+  }
+
+  private newShelly(dto: CreateDeviceDto, randomMac: string): Device {
+    if (!dto.shelly || dto.tasmota || dto.type === 'tasmota') {
+      throw new BadRequestException(
+        'Shelly típushoz csak shelly beállítás adható meg.',
+      );
+    }
     const now = new Date();
-    const mac = (
-      dto.shelly.mac ?? randomBytes(6).toString('hex')
-    ).toLowerCase();
+    const mac = (dto.shelly.mac ?? randomMac).toLowerCase();
     const config: ShellyConfig = {
       generation: dto.shelly.generation,
       deviceId: shellyDeviceId(dto.type, dto.shelly.generation, mac),
@@ -62,9 +102,8 @@ export class DevicesService {
       enableControl: dto.shelly.enableControl ?? true,
       addon: normalizeAddon(dto.shelly.addon),
     };
-    this.assertUnique(config);
-
-    const device: Device = {
+    this.assertUniqueShelly(config);
+    return {
       id: randomUUID(),
       name: dto.name.trim(),
       type: dto.type,
@@ -81,41 +120,92 @@ export class DevicesService {
       ),
       sensors: resizeSensors([], config.addon.sensorCount),
     };
-    await this.store.insert(device);
-    return this.publish(this.simulation.load(device));
   }
 
-  async update(id: string, dto: UpdateDeviceDto): Promise<DeviceView> {
-    const current = this.get(id);
-    const { status: _status, ...device } = current;
-    if (dto.name !== undefined) device.name = dto.name.trim();
-    if (dto.shelly) {
-      if (!device.shelly)
-        throw new BadRequestException('Az eszköz nem Shelly eszköz.');
-      const { topicPrefix, rpcNtf, statusNtf, enableControl, addon } =
-        dto.shelly;
-      if (addon !== undefined) {
-        const normalized = normalizeAddon(addon);
-        device.sensors = resizeSensors(device.sensors, normalized.sensorCount);
-        device.shelly = { ...device.shelly, addon: normalized };
-      }
-      device.shelly = {
-        ...device.shelly,
-        ...(topicPrefix !== undefined
-          ? { topicPrefix: topicPrefix || null }
-          : {}),
-        ...(rpcNtf !== undefined ? { rpcNtf } : {}),
-        ...(statusNtf !== undefined ? { statusNtf } : {}),
-        ...(enableControl !== undefined ? { enableControl } : {}),
-      };
-      this.assertUnique(device.shelly, id);
+  private newTasmota(dto: CreateDeviceDto, randomMac: string): Device {
+    const t = dto.tasmota;
+    if (!t || dto.shelly) {
+      throw new BadRequestException(
+        'Tasmota típushoz csak tasmota beállítás adható meg.',
+      );
     }
-    if (JSON.stringify(device.sensors) !== JSON.stringify(current.sensors)) {
-      await this.store.updateWithSensors(device);
-    } else {
-      await this.store.update(device);
+    const mac = (t.mac ?? randomMac).toUpperCase();
+    const config: TasmotaConfig = {
+      mac,
+      topic: t.topic ?? defaultTasmotaTopic(mac),
+      fullTopic: normalizeFullTopic(t.fullTopic ?? TASMOTA_DEFAULTS.fullTopic),
+      groupTopic: t.groupTopic ?? TASMOTA_DEFAULTS.groupTopic,
+      relayCount: t.relayCount,
+      hasEnergy: t.hasEnergy,
+      sensorCount: t.sensorCount,
+      // A discovery egy későbbi lépésben érkezik.
+      discovery: false,
+      telePeriod: t.telePeriod ?? TASMOTA_DEFAULTS.telePeriod,
+      publishOnChange: t.publishOnChange ?? TASMOTA_DEFAULTS.publishOnChange,
+      powerRetain: t.powerRetain ?? TASMOTA_DEFAULTS.powerRetain,
+    };
+    this.assertUniqueTasmota(config);
+    return {
+      id: randomUUID(),
+      name: dto.name.trim(),
+      type: 'tasmota',
+      enabled: dto.enabled ?? true,
+      tasmota: config,
+      switches: resizeSwitches([], t.relayCount, t.hasEnergy),
+      sensors: resizeSensors([], t.sensorCount),
+    };
+  }
+
+  private applyShelly(device: Device, dto: UpdateShellyDto): void {
+    if (!device.shelly) {
+      throw new BadRequestException('Az eszköz nem Shelly eszköz.');
     }
-    return this.publish(this.simulation.reconfigure(device));
+    const { topicPrefix, rpcNtf, statusNtf, enableControl, addon } = dto;
+    if (addon !== undefined) {
+      const normalized = normalizeAddon(addon);
+      device.sensors = resizeSensors(device.sensors, normalized.sensorCount);
+      device.shelly = { ...device.shelly, addon: normalized };
+    }
+    device.shelly = {
+      ...device.shelly,
+      ...(topicPrefix !== undefined
+        ? { topicPrefix: topicPrefix || null }
+        : {}),
+      ...(rpcNtf !== undefined ? { rpcNtf } : {}),
+      ...(statusNtf !== undefined ? { statusNtf } : {}),
+      ...(enableControl !== undefined ? { enableControl } : {}),
+    };
+    this.assertUniqueShelly(device.shelly, device.id);
+  }
+
+  private applyTasmota(device: Device, dto: UpdateTasmotaDto): void {
+    if (!device.tasmota) {
+      throw new BadRequestException('Az eszköz nem Tasmota eszköz.');
+    }
+    const config: TasmotaConfig = { ...device.tasmota };
+    for (const key of [
+      'topic',
+      'groupTopic',
+      'relayCount',
+      'hasEnergy',
+      'sensorCount',
+      'telePeriod',
+      'publishOnChange',
+      'powerRetain',
+    ] as const) {
+      if (dto[key] !== undefined) Object.assign(config, { [key]: dto[key] });
+    }
+    if (dto.fullTopic !== undefined) {
+      config.fullTopic = normalizeFullTopic(dto.fullTopic);
+    }
+    device.switches = resizeSwitches(
+      device.switches,
+      config.relayCount,
+      config.hasEnergy,
+    );
+    device.sensors = resizeSensors(device.sensors, config.sensorCount);
+    device.tasmota = config;
+    this.assertUniqueTasmota(config, device.id);
   }
 
   /** Lekapcsolás vagy visszakapcsolás (kiesés szimulációja). */
@@ -191,8 +281,29 @@ export class DevicesService {
     }
   }
 
+  /** A Tasmota topic és a belőle képzett parancstopic is egyedi. */
+  private assertUniqueTasmota(config: TasmotaConfig, selfId?: string): void {
+    if (config.topic === config.groupTopic) {
+      throw new BadRequestException(
+        'A topic és a csoporttopic nem lehet azonos.',
+      );
+    }
+    const command = tasmotaTopic(config, 'cmnd');
+    for (const other of this.simulation.list()) {
+      if (other.id === selfId || !other.tasmota) continue;
+      if (
+        other.tasmota.topic === config.topic ||
+        tasmotaTopic(other.tasmota, 'cmnd') === command
+      ) {
+        throw new ConflictException(
+          `A(z) "${config.topic}" topicot már ${other.name} használja.`,
+        );
+      }
+    }
+  }
+
   /** Az eszközazonosító és a ténylegesen használt topic-előtag is egyedi. */
-  private assertUnique(config: ShellyConfig, selfId?: string): void {
+  private assertUniqueShelly(config: ShellyConfig, selfId?: string): void {
     const prefix = shellyTopicPrefix(config);
     for (const other of this.simulation.list()) {
       if (other.id === selfId || !other.shelly) continue;
@@ -224,4 +335,33 @@ function normalizeAddon(addon: AddonDto | undefined): ShellyConfig['addon'] {
     );
   }
   return { enabled: true, sensorCount: addon.sensorCount };
+}
+
+/** A FullTopic perjelre végződik; a Tasmota is így egészíti ki. */
+function normalizeFullTopic(fullTopic: string): string {
+  return fullTopic.endsWith('/') ? fullTopic : `${fullTopic}/`;
+}
+
+/**
+ * A Tasmota relék a kért számra méretezve; a meglévők állapota megmarad.
+ * Az egyetlen mérő (ha van) a 0. kapcsolón él, és az egész eszközt méri.
+ */
+function resizeSwitches(
+  existing: readonly SwitchState[],
+  count: number,
+  hasEnergy: boolean,
+): SwitchState[] {
+  const now = new Date();
+  return Array.from({ length: count }, (_, index) => {
+    const current = existing.find((s) => s.index === index);
+    const state: SwitchState = current
+      ? { index, output: current.output, source: current.source }
+      : { index, output: false, source: 'init' };
+    if (index === 0 && hasEnergy) {
+      state.meter = current?.meter
+        ? structuredClone(current.meter)
+        : defaultMeter(now);
+    }
+    return state;
+  });
 }

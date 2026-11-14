@@ -1,9 +1,14 @@
 import {
+  type DeviceType,
   SHELLY_ADDON_MAX_SENSORS,
   SHELLY_DEVICE_TYPES,
   SHELLY_GENERATIONS,
-  type ShellyDeviceType,
   type ShellyGeneration,
+  TASMOTA_DEFAULTS,
+  TASMOTA_MAX_RELAYS,
+  TASMOTA_MAX_SENSORS,
+  TASMOTA_TELEPERIOD_MAX,
+  TASMOTA_TELEPERIOD_MIN,
   TEMPERATURE_MAX_C,
   TEMPERATURE_MIN_C,
   type TemperatureError,
@@ -23,6 +28,7 @@ import {
   Max,
   MaxLength,
   Min,
+  ValidateIf,
   ValidateNested,
 } from 'class-validator';
 
@@ -92,6 +98,107 @@ export class CreateShellyDto {
   addon?: AddonDto;
 }
 
+const DEVICE_TYPES: readonly DeviceType[] = [...SHELLY_DEVICE_TYPES, 'tasmota'];
+
+/** Tasmota topic és csoporttopic: perjel, helyettesítő és szóköz nélkül. */
+const TASMOTA_TOPIC = /^[^\s#+/]+$/;
+const TASMOTA_TOPIC_MESSAGE =
+  'a topic nem tartalmazhat perjelet, szóközt, # vagy + jelet';
+/** FullTopic: a %prefix% és a %topic% jelölő is kell, különben a parancs- és állapottopic összemosódik. */
+const FULL_TOPIC = /^(?=.*%prefix%)(?=.*%topic%)[^\s#+]+$/;
+const FULL_TOPIC_MESSAGE =
+  'a FullTopic tartalmazza a %prefix% és a %topic% jelölőt, szóköz, # és + nélkül';
+
+class TasmotaFieldsDto {
+  @ApiPropertyOptional({
+    example: 'tasmota_BE54DC',
+    description: 'elhagyva tasmota_<MAC vége>',
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(64)
+  @Matches(TASMOTA_TOPIC, { message: TASMOTA_TOPIC_MESSAGE })
+  topic?: string;
+
+  @ApiPropertyOptional({ example: TASMOTA_DEFAULTS.fullTopic })
+  @IsOptional()
+  @IsString()
+  @MaxLength(128)
+  @Matches(FULL_TOPIC, { message: FULL_TOPIC_MESSAGE })
+  fullTopic?: string;
+
+  @ApiPropertyOptional({ example: TASMOTA_DEFAULTS.groupTopic })
+  @IsOptional()
+  @IsString()
+  @MaxLength(64)
+  @Matches(TASMOTA_TOPIC, { message: TASMOTA_TOPIC_MESSAGE })
+  groupTopic?: string;
+
+  @ApiPropertyOptional({ example: TASMOTA_DEFAULTS.telePeriod })
+  @IsOptional()
+  @IsInt({ message: 'a TelePeriod egész szám (mp)' })
+  @Min(TASMOTA_TELEPERIOD_MIN)
+  @Max(TASMOTA_TELEPERIOD_MAX)
+  telePeriod?: number;
+
+  @ApiPropertyOptional({ default: true })
+  @IsOptional()
+  @IsBoolean()
+  publishOnChange?: boolean;
+
+  @ApiPropertyOptional({ default: false })
+  @IsOptional()
+  @IsBoolean()
+  powerRetain?: boolean;
+}
+
+export class CreateTasmotaDto extends TasmotaFieldsDto {
+  @ApiPropertyOptional({
+    example: 'a8032abe54dc',
+    description: '12 hex jegy; elhagyva véletlen',
+  })
+  @IsOptional()
+  @Matches(/^[0-9a-fA-F]{12}$/, { message: 'a MAC-cím 12 hexadecimális jegy' })
+  mac?: string;
+
+  @ApiProperty({ minimum: 1, maximum: TASMOTA_MAX_RELAYS, example: 1 })
+  @IsInt({ message: 'a relék száma egész szám' })
+  @Min(1)
+  @Max(TASMOTA_MAX_RELAYS)
+  relayCount: number;
+
+  @ApiProperty({ example: true })
+  @IsBoolean()
+  hasEnergy: boolean;
+
+  @ApiProperty({ minimum: 0, maximum: TASMOTA_MAX_SENSORS, example: 0 })
+  @IsInt({ message: 'a hőmérők száma egész szám' })
+  @Min(0)
+  @Max(TASMOTA_MAX_SENSORS)
+  sensorCount: number;
+}
+
+export class UpdateTasmotaDto extends TasmotaFieldsDto {
+  @ApiPropertyOptional({ minimum: 1, maximum: TASMOTA_MAX_RELAYS })
+  @IsOptional()
+  @IsInt({ message: 'a relék száma egész szám' })
+  @Min(1)
+  @Max(TASMOTA_MAX_RELAYS)
+  relayCount?: number;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsBoolean()
+  hasEnergy?: boolean;
+
+  @ApiPropertyOptional({ minimum: 0, maximum: TASMOTA_MAX_SENSORS })
+  @IsOptional()
+  @IsInt({ message: 'a hőmérők száma egész szám' })
+  @Min(0)
+  @Max(TASMOTA_MAX_SENSORS)
+  sensorCount?: number;
+}
+
 export class CreateDeviceDto {
   @ApiProperty({ example: 'Bojler' })
   @IsString()
@@ -99,23 +206,36 @@ export class CreateDeviceDto {
   @MaxLength(64)
   name: string;
 
-  @ApiProperty({ enum: SHELLY_DEVICE_TYPES })
-  @IsIn(SHELLY_DEVICE_TYPES, {
-    message:
-      'a típus shelly-1pm vagy shelly-2pm lehet (a Tasmota egy későbbi lépésben érkezik)',
+  @ApiProperty({ enum: DEVICE_TYPES })
+  @IsIn(DEVICE_TYPES, {
+    message: 'a típus shelly-1pm, shelly-2pm vagy tasmota lehet',
   })
-  type: ShellyDeviceType;
+  type: DeviceType;
 
   @ApiPropertyOptional({ default: true })
   @IsOptional()
   @IsBoolean()
   enabled?: boolean;
 
-  @ApiProperty({ type: CreateShellyDto })
+  @ApiPropertyOptional({
+    type: CreateShellyDto,
+    description: 'Shelly típusnál kötelező',
+  })
+  @ValidateIf((o: CreateDeviceDto) => o.type !== 'tasmota')
   @IsDefined({ message: 'a shelly beállítás kötelező' })
   @ValidateNested()
   @Type(() => CreateShellyDto)
-  shelly: CreateShellyDto;
+  shelly?: CreateShellyDto;
+
+  @ApiPropertyOptional({
+    type: () => CreateTasmotaDto,
+    description: 'Tasmota típusnál kötelező',
+  })
+  @ValidateIf((o: CreateDeviceDto) => o.type === 'tasmota')
+  @IsDefined({ message: 'a tasmota beállítás kötelező' })
+  @ValidateNested()
+  @Type(() => CreateTasmotaDto)
+  tasmota?: CreateTasmotaDto;
 }
 
 export class UpdateShellyDto {
@@ -168,6 +288,12 @@ export class UpdateDeviceDto {
   @ValidateNested()
   @Type(() => UpdateShellyDto)
   shelly?: UpdateShellyDto;
+
+  @ApiPropertyOptional({ type: UpdateTasmotaDto })
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => UpdateTasmotaDto)
+  tasmota?: UpdateTasmotaDto;
 }
 
 export class SetSwitchDto {
