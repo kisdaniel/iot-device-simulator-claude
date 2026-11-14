@@ -175,7 +175,13 @@ export function tasmotaTopic(
   prefix: TasmotaPrefix,
   command = '',
 ): string {
-  return resolveFullTopic(config.fullTopic, config.topic, config.mac, prefix, command);
+  return resolveFullTopic(
+    config.fullTopic,
+    config.topic,
+    config.mac,
+    prefix,
+    command,
+  );
 }
 
 /** A csoporttopic parancstopicja, pl. cmnd/tasmotas/POWER. */
@@ -183,7 +189,13 @@ export function tasmotaGroupTopic(
   config: Pick<TasmotaConfig, 'fullTopic' | 'groupTopic' | 'mac'>,
   command = '',
 ): string {
-  return resolveFullTopic(config.fullTopic, config.groupTopic, config.mac, 'cmnd', command);
+  return resolveFullTopic(
+    config.fullTopic,
+    config.groupTopic,
+    config.mac,
+    'cmnd',
+    command,
+  );
 }
 
 /** A relé kulcsa: egy relénél POWER, többnél POWER1 … POWERn. */
@@ -261,7 +273,10 @@ export interface TasmotaSettings {
 }
 
 /** A Tasmota discovery topicja a MAC-címmel, pl. tasmota/discovery/A8032ABE54DC/config. */
-export function tasmotaDiscoveryTopic(mac: string, kind: 'config' | 'sensors'): string {
+export function tasmotaDiscoveryTopic(
+  mac: string,
+  kind: 'config' | 'sensors',
+): string {
   return `tasmota/discovery/${mac.toUpperCase()}/${kind}`;
 }
 
@@ -389,10 +404,22 @@ export const SIM_EVENT_TYPES: readonly SimEventType[] = [
 /** A közös kapcsolat saját állapottopicja; ez a kapcsolat egyetlen végakarata (LWT). */
 export const SIMULATOR_STATUS_TOPIC = 'iot-simulator/status';
 
+/** A generált Home Assistant konfiguráció fájlneve. */
+export const HOMEASSISTANT_CONFIG_FILE = 'iot_simulator.yaml';
+
+/**
+ * Ide mentse a felhasználó a generált konfigurációt, a docker-compose.yml-hez képest;
+ * a compose ezt a mappát csatolja a Home Assistant csomagkönyvtárának.
+ */
+export const HOMEASSISTANT_PACKAGES_DIR = 'homeassistant/packages';
+export const HOMEASSISTANT_CONFIG_PATH = `${HOMEASSISTANT_PACKAGES_DIR}/${HOMEASSISTANT_CONFIG_FILE}`;
+
 /** A GET /api/homeassistant/config válasza. */
 export interface HomeAssistantConfigResult {
   /** A configuration.yaml-ba másolható `mqtt:` blokk */
   yaml: string;
+  /** Home Assistant és Mosquitto docker-compose.yml; a fenti konfigurációt a HOMEASSISTANT_CONFIG_PATH útvonalról tölti be */
+  compose: string;
   /** A konfigurációba került eszközök száma */
   deviceCount: number;
   /** A létrehozott entitások száma */
