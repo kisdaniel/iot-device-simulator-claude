@@ -256,6 +256,13 @@ export interface TasmotaSettings {
   telePeriod?: number;
   publishOnChange?: boolean;
   powerRetain?: boolean;
+  /** Tasmota discovery (Home Assistant Tasmota integráció); alapból kikapcsolva */
+  discovery?: boolean;
+}
+
+/** A Tasmota discovery topicja a MAC-címmel, pl. tasmota/discovery/A8032ABE54DC/config. */
+export function tasmotaDiscoveryTopic(mac: string, kind: 'config' | 'sensors'): string {
+  return `tasmota/discovery/${mac.toUpperCase()}/${kind}`;
 }
 
 /** POST /api/devices törzse; a típusnak megfelelő beállítás kötelező. */
