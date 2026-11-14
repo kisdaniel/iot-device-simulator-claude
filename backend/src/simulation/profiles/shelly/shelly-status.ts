@@ -35,17 +35,36 @@ export function shellyTimestamp(now: Date): number {
   return round(now.getTime() / 1000, 2);
 }
 
+/** Futó visszakapcsolási időzítő (`toggle_after`) egy kapcsolón. */
+export interface ShellyTimer {
+  /** Az indítás ideje (ms, Unix). */
+  startedAt: number;
+  /** Az időzítő hossza másodpercben. */
+  duration: number;
+  /** Erre az állapotra vált vissza a lejáratkor. */
+  flipTo: boolean;
+}
+
 /** A `switch:<id>` komponens teljes állapota (Switch.GetStatus, status/switch:<id>). */
 export function switchStatus(
   state: SwitchState,
   now: Date,
   byMinute: readonly number[] = [0, 0, 0],
+  timer?: ShellyTimer,
 ): Record<string, unknown> {
   const reading = readMeter(state, now);
   return {
     id: state.index,
     source: state.source,
     output: state.output,
+    // Csak futó időzítőnél szerepelnek, ahogy a valós eszközön.
+    ...(timer
+      ? {
+          timer_started_at: shellyTimestamp(new Date(timer.startedAt)),
+          timer_duration: timer.duration,
+          timer_type: 'toggle_after',
+        }
+      : {}),
     apower: round(reading.power, 1),
     voltage: round(reading.voltage, 1),
     freq: round(reading.frequency, 1),
@@ -143,6 +162,7 @@ export function fullStatus(
   startedAt: Date,
   now: Date,
   byMinute: (index: number) => readonly number[] = () => [0, 0, 0],
+  timer: (index: number) => ShellyTimer | undefined = () => undefined,
 ): Record<string, unknown> {
   const config = shellyConfig(device);
   const status: Record<string, unknown> = {
@@ -164,6 +184,7 @@ export function fullStatus(
       state,
       now,
       byMinute(state.index),
+      timer(state.index),
     );
   for (const state of device.sensors)
     status[`temperature:${temperatureId(state)}`] = temperatureStatus(state);
