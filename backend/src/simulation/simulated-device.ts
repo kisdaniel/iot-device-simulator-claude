@@ -1,44 +1,67 @@
-import type { Device, MqttLogEntry } from '@iot-sim/shared';
+import type { Device, DeviceRunStatus, MqttLogEntry } from '@iot-sim/shared';
 import { Logger } from '@nestjs/common';
 import type { EventBus } from '../events/event-bus.service.js';
+import type { MessageHandler } from '../mqtt/topic-router.js';
 import type {
   MqttGateway,
   PublishOptions,
 } from '../mqtt/mqtt-gateway.service.js';
-import type { DeviceProfile, ProfileContext } from './device-profile.js';
+import type {
+  ChangeSource,
+  DeviceProfile,
+  ProfileContext,
+} from './device-profile.js';
+
+export interface SimulatedDeviceOptions {
+  gateway: MqttGateway;
+  bus: EventBus;
+  logSize: number;
+  /** Az eszköz állapota megváltozott (kapcsoló, mérő): a tulajdonos ment és értesít. */
+  onStateChange: (device: SimulatedDevice) => void;
+}
 
 /**
- * Egy futó szimulált eszköz: állapot és profil, saját kapcsolat nélkül.
- * A közös kapcsolaton küld és fogad, és vezeti a saját üzenetnaplóját.
+ * Egy szimulált eszköz: állapot és profil, saját kapcsolat nélkül. A közös
+ * kapcsolaton küld és fogad, és vezeti a saját üzenetnaplóját. Profil nélkül
+ * (még nem támogatott típus) csak az állapotot tartja, nem indul el.
  */
 export class SimulatedDevice {
   private readonly logger = new Logger(SimulatedDevice.name);
   private readonly log: MqttLogEntry[] = [];
   private readonly ctx: ProfileContext;
+  private readonly handler: MessageHandler = (topic, payload) =>
+    this.receive(topic, payload);
   private unsubscribers: Array<() => void> = [];
   private started = false;
   private online = false;
+  private startedAt = new Date();
 
   constructor(
     readonly device: Device,
-    private readonly profile: DeviceProfile,
-    private readonly gateway: MqttGateway,
-    private readonly bus: EventBus,
-    private readonly logSize: number,
+    readonly profile: DeviceProfile | undefined,
+    private readonly options: SimulatedDeviceOptions,
   ) {
-    this.ctx = {
+    const ctx = {
       device,
-      publish: (topic, payload, options) =>
-        this.publish(topic, payload, options),
-    };
+      publish: (topic, payload, publishOptions) =>
+        this.publish(topic, payload, publishOptions),
+      setSwitch: (index, output, source) =>
+        this.setSwitch(index, output, source),
+    } as Omit<ProfileContext, 'startedAt'> as ProfileContext;
+    // Élő érték: az eszköz minden indításkor újraindítja az üzemidőt.
+    Object.defineProperty(ctx, 'startedAt', {
+      get: () => this.startedAt,
+      enumerable: true,
+    });
+    this.ctx = ctx;
   }
 
   get isStarted(): boolean {
     return this.started;
   }
 
-  get isOnline(): boolean {
-    return this.online;
+  get status(): DeviceRunStatus {
+    return this.online ? 'online' : 'offline';
   }
 
   get messages(): readonly MqttLogEntry[] {
@@ -47,20 +70,22 @@ export class SimulatedDevice {
 
   /** Regisztrálja a feliratkozásokat; élő kapcsolatnál az eszköz azonnal be is jelentkezik. */
   start(): void {
-    if (this.started) return;
+    if (this.started || !this.profile) return;
     this.started = true;
-    this.unsubscribers = this.profile
-      .subscriptions(this.device)
-      .map((pattern) =>
-        this.gateway.subscribe(pattern, (t, p) => this.receive(t, p)),
-      );
-    if (this.gateway.isConnected) this.announce();
+    this.startedAt = new Date();
+    // Ugyanaz a kezelő minden mintán: így egy több mintára illeszkedő üzenet is egyszer érkezik.
+    const patterns = [...new Set(this.profile.subscriptions(this.device))];
+    this.unsubscribers = patterns.map((p) =>
+      this.options.gateway.subscribe(p, this.handler),
+    );
+    if (this.options.gateway.isConnected) this.announce();
   }
 
   /** Bejelentkezés: elérhető üzenet és kezdő állapot. Minden (újra)csatlakozás után lefut. */
   announce(): void {
-    if (!this.started) return;
-    this.guard('onStart', () => this.profile.onStart(this.ctx));
+    if (!this.started || !this.profile) return;
+    const profile = this.profile;
+    this.guard('onStart', () => profile.onStart(this.ctx));
     this.setOnline(true);
   }
 
@@ -72,7 +97,9 @@ export class SimulatedDevice {
   /** Kiteszi a nem elérhető üzenetet, majd leiratkozik. */
   stop(): void {
     if (!this.started) return;
-    if (this.online) this.guard('onStop', () => this.profile.onStop(this.ctx));
+    const profile = this.profile;
+    if (this.online && profile)
+      this.guard('onStop', () => profile.onStop(this.ctx));
     for (const unsubscribe of this.unsubscribers) unsubscribe();
     this.unsubscribers = [];
     this.started = false;
@@ -80,16 +107,36 @@ export class SimulatedDevice {
   }
 
   tick(now: Date): void {
-    if (!this.online) return;
-    this.guard('onTick', () => this.profile.onTick(this.ctx, now));
+    const profile = this.profile;
+    if (!this.online || !profile) return;
+    this.guard('onTick', () => profile.onTick(this.ctx, now));
+  }
+
+  /**
+   * Kapcsoló állítása a felületről, MQTT-ről vagy időzítőből. Lekapcsolt eszközön
+   * is működik (mint a fizikai gomb hálózat nélkül), csak üzenet nem megy ki.
+   */
+  setSwitch(index: number, output: boolean, source: ChangeSource): boolean {
+    const state = this.device.switches.find((s) => s.index === index);
+    if (!state) throw new RangeError(`Nincs ${index}. kapcsoló az eszközön.`);
+    const before = structuredClone(state);
+    state.output = output;
+    state.source = source;
+    const profile = this.profile;
+    if (this.online && profile) {
+      this.guard('onSwitchChanged', () =>
+        profile.onSwitchChanged(this.ctx, index, before),
+      );
+    }
+    this.options.onStateChange(this);
+    return before.output;
   }
 
   private receive(topic: string, payload: Buffer): void {
-    if (!this.started) return;
+    const profile = this.profile;
+    if (!this.started || !profile) return;
     this.record('in', topic, payload.toString('utf8'), false);
-    this.guard('onMessage', () =>
-      this.profile.onMessage(this.ctx, topic, payload),
-    );
+    this.guard('onMessage', () => profile.onMessage(this.ctx, topic, payload));
   }
 
   private publish(
@@ -97,7 +144,7 @@ export class SimulatedDevice {
     payload: string | object,
     options?: PublishOptions,
   ): boolean {
-    const sent = this.gateway.publish(topic, payload, options);
+    const sent = this.options.gateway.publish(topic, payload, options);
     if (sent) {
       const body =
         typeof payload === 'string' ? payload : JSON.stringify(payload);
@@ -120,20 +167,20 @@ export class SimulatedDevice {
       payload,
       retain,
     };
-    if (this.logSize > 0) {
+    const size = this.options.logSize;
+    if (size > 0) {
       this.log.push(entry);
-      if (this.log.length > this.logSize)
-        this.log.splice(0, this.log.length - this.logSize);
+      if (this.log.length > size) this.log.splice(0, this.log.length - size);
     }
-    this.bus.emit({ type: 'mqtt.message', data: entry });
+    this.options.bus.emit({ type: 'mqtt.message', data: entry });
   }
 
   private setOnline(online: boolean): void {
     if (this.online === online) return;
     this.online = online;
-    this.bus.emit({
+    this.options.bus.emit({
       type: 'device.connection',
-      data: { id: this.device.id, status: online ? 'online' : 'offline' },
+      data: { id: this.device.id, status: this.status },
     });
   }
 
