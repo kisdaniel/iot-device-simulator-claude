@@ -241,6 +241,31 @@ Kérés és válasz:
 
 Ismeretlen metódusra `error: { "code": 404, "message": "No handler for <metódus>" }`, hibás paraméterre `code: -103` megy vissza; hibás JSON-ra nincs válasz. A hibakódok valós eszközzel ellenőrizendők.
 
+### Visszakapcsolási időzítő (`toggle_after`)
+
+A kimenet egy kapcsolással együtt időzítővel is állítható: a megadott idő után az eszköz magától az ellenkező állapotba vált vissza.
+
+| Indítás | Példa | Jelentés |
+| --- | --- | --- |
+| RPC | `Switch.Set` `{"id": 0, "on": true, "toggle_after": 30}` | Bekapcsol, 30 mp múlva kikapcsol; a válasz `{"was_on": …}` |
+| Parancstopic | `<p>/command/switch:0` = `on,30`, ill. `off,30` | Ugyanez a parancstopicon; az idő tizedes tört is lehet |
+
+Futó időzítő alatt a kapcsoló állapotában (`status/switch:<n>`, `Switch.GetStatus`, `Shelly.GetStatus`, valamint a változáskor küldött `NotifyStatus`) három mező is szerepel; lejárat vagy megszakítás után eltűnnek:
+
+```json
+{ "id": 0, "output": true, "source": "MQTT", "timer_started_at": 1794652540.26, "timer_duration": 30, "timer_type": "toggle_after" }
+```
+
+| Viselkedés | A szimulátorban | Forrás |
+| --- | --- | --- |
+| Az időtartam | Másodperc, pozitív szám; érvénytelen értékre `-103` hiba (`Invalid argument 'toggle_after'!`), a kimenet nem változik | Dokumentált: „flip-back timer in seconds” |
+| Állapotmezők | `timer_started_at` (Unix-idő, UTC), `timer_duration` (mp) és `timer_type` = `toggle_after`, csak futó időzítőnél | Dokumentált |
+| Parancstopic | `on[,<mp>]`, `off[,<mp>]`; hibás szám a `<p>/error/switch:<n>` topicra megy | Dokumentált (a hibatopic a meglévő hibakezelést követi) |
+| Megszakítás | Bármely más kapcsolás (felület, MQTT, időzítő nélküli `Switch.Set` vagy `Switch.Toggle`) megszakítja; új időzítős parancs a régi helyére lép, akkor is, ha a kimenet már a kért állapotban van | Feltételezés: a dokumentáció nem írja le; a Shelly általános elve, hogy a relé mindig az utolsó parancsot követi, és a `power_restore_delay` időzítőt is minden explicit parancs megszakítja |
+| A lejárat forrása | `source: "timer"` | Feltételezés: a dokumentáció nem nevez meg értéket; valós eszközön ellenőrizendő |
+| Pontosság | A közös másodperces óra váltja vissza, ezért legfeljebb kb. 1 mp késhet | A szimulátor sajátossága |
+| Újraindulás | Az eszköz újraindulásakor (lekapcsolás, a feliratkozásokat érintő módosítás, a szimulátor újraindítása) a futó időzítő elvész | A valós eszköz újraindulásához hasonló; ellenőrizendő |
+
 ### Azonosítók
 
 | Típus | Generáció | Eszközazonosító | `model` | `gen` | Komponensek |
@@ -388,7 +413,6 @@ Minden végpont az `/api` előtag alatt van, JSON-t fogad és ad vissza; a módo
 | GET | `/api/devices/:id` | – | Egy eszköz |
 | PATCH | `/api/devices/:id` | `UpdateDeviceDto` | Név és konfiguráció; topicváltáskor újrafeliratkozás |
 | DELETE | `/api/devices/:id` | – | Nem elérhető üzenet, leiratkozás, majd törlés |
-| POST | `/api/devices/:id/clone` | – | Másolat új azonosítóval |
 | POST | `/api/devices/:id/connect` | – | Eszköz visszakapcsolása: elérhető üzenet és kezdő állapot |
 | POST | `/api/devices/:id/disconnect` | – | Eszköz lekapcsolása: kimegy a nem elérhető üzenet, utána az eszköz nem küld és nem fogad |
 | PUT | `/api/devices/:id/switches/:index` | `{ output: boolean }` | Kapcsolás |
@@ -693,7 +717,7 @@ A protokolltesztekhez szükséges referenciaforgalmat egy valódi Plus 1PM, egy 
 4. **Mérési modell.** Fogyasztásmérés Shelly eszközön, percenkénti `aenergy`, mérővezérlő a felületen.
 5. **Add-on.** `temperature:<id>` komponensek, `Temperature.GetStatus`, hőmérővezérlő.
 6. **Tasmota.** `POWER`, `STATE`, `SENSOR`, `STATUS`, `TelePeriod`, több relé, DS18B20 hőmérők, discovery.
-7. **Kiegészítők.** Üzenetnapló, másolás, JSON import és export, kiesés szimulációja, `toggle_after`, szenzorhiba, Home Assistant konfiguráció és docker-compose generálása.
+7. **Kiegészítők.** Üzenetnapló, JSON import és export, kiesés szimulációja, `toggle_after`, szenzorhiba, Home Assistant konfiguráció és docker-compose generálása.
 8. **Lezárás.** Protokolltesztek valós forgalom alapján, végponti próba, README.
 
 ## Verziókezelés és commit-szabályok
@@ -744,7 +768,9 @@ docs: add functional and technical specification
 ## Források
 
 - [Shelly Gen2+ API – MQTT](https://shelly-api-docs.shelly.cloud/gen2/ComponentsAndServices/Mqtt/): beállítások, topicok, RPC MQTT-n
-- [Shelly Gen2+ API – Switch](https://shelly-api-docs.shelly.cloud/gen2/ComponentsAndServices/Switch): állapotmezők, RPC metódusok, MQTT-vezérlés
+- [Shelly Gen2+ API – Switch](https://shelly-api-docs.shelly.cloud/gen2/ComponentsAndServices/Switch): állapotmezők, RPC metódusok, MQTT-vezérlés, a `toggle_after` és az időzítő állapotmezői
+- [Shelly Gen2 API 0.14 – Switch](https://shelly-api-docs.shelly.cloud/gen2/0.14/ComponentsAndServices/Switch): a parancstopic `on[,number]` és `off[,number]` formája
+- [Shelly – Schedule and manual control: which has priority](https://www.shelly.com/it/blogs/documentazione/schedule-and-manual-control-on-a-shelly-relay-which-has-priority): a relé mindig az utolsó parancsot követi
 - [Shelly Gen2+ API – Temperature](https://shelly-api-docs.shelly.cloud/gen2/ComponentsAndServices/Temperature): állapotmezők, jelentési küszöb
 - [Shelly Sensor Add-On API](https://shelly-api-docs.shelly.cloud/gen2/Addons/ShellySensorAddon): perifériák és komponensazonosítók (keresési kivonat alapján)
 - [Shelly Plus Add-on termékoldal](https://www.shelly.com/de/products/shelly-plus-add-on): támogatott szenzorok száma (keresési kivonat alapján)

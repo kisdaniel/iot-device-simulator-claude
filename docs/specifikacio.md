@@ -61,7 +61,6 @@ A követelmények azonosítója a technikai specifikációban és a tesztekben h
 | F-13 | Az eszköz szerkeszthető és törölhető; törléskor az eszköz nem elérhetőként jelenti magát. | K |
 | F-14 | Az eszköz a felületről le- és visszakapcsolható (kiesés szimulációja): lekapcsolva nem elérhetőként jelenti magát, és nem küld, nem fogad üzenetet. | K |
 | F-15 | Az eszközök és utolsó állapotuk helyi SQLite adatbázisban tárolódnak, és újraindítás után megmaradnak. | K |
-| F-16 | Meglévő eszköz másolható (új azonosítóval), hogy sok eszköz gyorsan felvehető legyen. | O |
 | F-17 | Tasmota eszközön eszközönként bekapcsolható a Tasmota discovery: az eszköz megőrzött felfedezési üzenetet tesz közzé, amelyből a Home Assistant Tasmota integrációja magától felveszi; kikapcsoláskor és törléskor az üzenet törlődik. | K |
 
 ### Kapcsoló
@@ -72,7 +71,7 @@ A követelmények azonosítója a technikai specifikációban és a tesztekben h
 | F-21 | A kapcsoló MQTT-n érkező parancsra is kapcsol (be, ki, átváltás), és a valós eszköznek megfelelő választ és állapotüzenetet küldi. | K |
 | F-22 | Az állapot MQTT-n lekérdezhető (Shelly: RPC és `status_update`; Tasmota: üres `POWER` parancs). | K |
 | F-23 | Az MQTT-n érkezett kapcsolás a felületen frissítés nélkül, 1 másodpercen belül megjelenik. | K |
-| F-24 | Shelly időzített visszakapcsolás (`toggle_after`, ill. `on,<mp>`) támogatása. | O |
+| F-24 | Shelly időzített visszakapcsolás: a `Switch.Set` `toggle_after` paramétere, ill. a parancstopic `on,<mp>` és `off,<mp>` formája a megadott másodperc után visszaváltja a kimenetet. A futó időzítő az állapotüzenetekben látszik; bármely más kapcsolás megszakítja. | O |
 
 ### Fogyasztásmérő
 
@@ -127,7 +126,7 @@ A felület egyoldalas Angular alkalmazás Bootstrap stílussal, négy képernyő
 | Képernyő | Tartalom | Műveletek |
 | --- | --- | --- |
 | Eszközlista (kezdőlap) | Eszközönként egy kártya: név, típus, azonosító, kapcsolati állapot, kapcsolók, aktuális teljesítmény, hőmérsékletek. Fejlécben a broker állapota. | Kapcsoló átbillentése közvetlenül a kártyán; új eszköz; szűrés típusra és névre. |
-| Eszköz részletei | Kapcsolónként egy blokk: állapot, terhelés (W), feszültség (V), áramerősség (A), energiaszámláló. Hőmérőnként egy beviteli mező és csúszka. Az eszköz MQTT topicjai. Üzenetnapló. | Kapcsolás; mért értékek megadása; számláló nullázása; lekapcsolás és visszakapcsolás; szerkesztés; másolás; törlés (megerősítéssel). |
+| Eszköz részletei | Kapcsolónként egy blokk: állapot, terhelés (W), feszültség (V), áramerősség (A), energiaszámláló. Hőmérőnként egy beviteli mező és csúszka. Az eszköz MQTT topicjai. Üzenetnapló. | Kapcsolás; mért értékek megadása; számláló nullázása; lekapcsolás és visszakapcsolás; szerkesztés; törlés (megerősítéssel). |
 | Home Assistant | A felvett eszközök listája jelölőnégyzetekkel. Két fül: a generált Home Assistant konfiguráció és a `docker-compose.yml` előnézete, mindkettőn a mentés helyével. Darabszámok és figyelmeztetések. | Eszközök kiválasztása; discoveryvel felvett Tasmota eszközök bevonása; másolás; letöltés. |
 | Beállítások | Broker kapcsolati adatai, kapcsolati állapot és az utolsó hibaüzenet. | Mentés; kapcsolat tesztelése; konfiguráció exportálása és importálása JSON fájlból, előnézettel. |
 
