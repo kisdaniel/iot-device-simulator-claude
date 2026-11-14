@@ -1,5 +1,6 @@
 import {
   type Device,
+  HOMEASSISTANT_CONFIG_PATH,
   type HomeAssistantConfigResult,
   SHELLY_ADDON_FIRST_ID,
   SHELLY_MODELS,
@@ -70,7 +71,7 @@ interface SensorSpec {
 export function buildHomeAssistantConfig(
   devices: readonly Device[],
   options: HaConfigOptions,
-): HomeAssistantConfigResult {
+): Omit<HomeAssistantConfigResult, 'compose'> {
   const entities: Entities = { switch: [], sensor: [] };
   const warnings: string[] = [];
   let deviceCount = 0;
@@ -103,6 +104,7 @@ export function buildHomeAssistantConfig(
     `# Generálva: ${new Date().toISOString()}; ${deviceCount} eszköz, ${entityCount} entitás.`,
     '# Másold a configuration.yaml-ba (ha már van mqtt: kulcs, a listákat fűzd hozzá),',
     '# majd töltsd újra az MQTT-entitásokat vagy indítsd újra a Home Assistantet.',
+    `# A generált docker-compose.yml mellé ide mentsd: ${HOMEASSISTANT_CONFIG_PATH}`,
     '',
   ].join('\n');
   // A Home Assistant YAML 1.1-et olvas: ott az idézőjel nélküli on/off/ON/OFF

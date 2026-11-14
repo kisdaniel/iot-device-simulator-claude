@@ -1,7 +1,11 @@
-import type { HomeAssistantConfigResult } from '@iot-sim/shared';
+import {
+  HOMEASSISTANT_CONFIG_FILE,
+  type HomeAssistantConfigResult,
+} from '@iot-sim/shared';
 import { Controller, Get, Header, Query } from '@nestjs/common';
 import { ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { SimulationService } from '../simulation/simulation.service.js';
+import { buildHomeAssistantCompose } from './ha-compose.js';
 import { buildHomeAssistantConfig } from './ha-config.js';
 
 /** Igaz, ha a lekérdezési paraméter "true" vagy "1". */
@@ -40,7 +44,7 @@ export class HomeAssistantController {
   @Header('Content-Type', 'text/yaml; charset=utf-8')
   @Header(
     'Content-Disposition',
-    'attachment; filename="iot-simulator-homeassistant.yaml"',
+    `attachment; filename="${HOMEASSISTANT_CONFIG_FILE}"`,
   )
   @ApiOperation({ summary: 'Ugyanez letölthető YAML-fájlként' })
   configFile(
@@ -48,6 +52,17 @@ export class HomeAssistantController {
     @Query('includeDiscovered') includeDiscovered?: string,
   ): string {
     return this.build(ids, includeDiscovered).yaml;
+  }
+
+  @Get('docker-compose.yml')
+  @Header('Content-Type', 'text/yaml; charset=utf-8')
+  @Header('Content-Disposition', 'attachment; filename="docker-compose.yml"')
+  @ApiOperation({
+    summary:
+      'docker-compose.yml Home Assistanttel és Mosquittóval; a generált konfigurációt csomagként tölti be',
+  })
+  composeFile(): string {
+    return compose();
   }
 
   private build(
@@ -59,8 +74,18 @@ export class HomeAssistantController {
       .list()
       .filter((d) => !wanted || wanted.has(d.id))
       .map(({ status: _status, ...device }) => device);
-    return buildHomeAssistantConfig(devices, {
-      includeDiscovered: flag(includeDiscovered),
-    });
+    return {
+      ...buildHomeAssistantConfig(devices, {
+        includeDiscovered: flag(includeDiscovered),
+      }),
+      compose: compose(),
+    };
   }
+}
+
+/** A compose a szerver időzónáját kapja alapértéknek (a TZ változóval felülírható). */
+function compose(): string {
+  return buildHomeAssistantCompose({
+    timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+  });
 }
