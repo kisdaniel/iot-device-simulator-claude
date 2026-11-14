@@ -150,6 +150,15 @@ class TasmotaFieldsDto {
   @IsOptional()
   @IsBoolean()
   powerRetain?: boolean;
+
+  @ApiPropertyOptional({
+    default: false,
+    description:
+      'Tasmota discovery: megőrzött felfedezési üzenet a Home Assistant számára',
+  })
+  @IsOptional()
+  @IsBoolean()
+  discovery?: boolean;
 }
 
 export class CreateTasmotaDto extends TasmotaFieldsDto {
