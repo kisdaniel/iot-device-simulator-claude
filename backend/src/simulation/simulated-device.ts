@@ -9,8 +9,10 @@ import type {
 import type {
   ChangeSource,
   DeviceProfile,
+  MeterPatch,
   ProfileContext,
 } from './device-profile.js';
+import { commitEnergy as commitMeterEnergy } from './meter.js';
 
 export interface SimulatedDeviceOptions {
   gateway: MqttGateway;
@@ -28,6 +30,7 @@ export interface SimulatedDeviceOptions {
 export class SimulatedDevice {
   private readonly logger = new Logger(SimulatedDevice.name);
   private readonly log: MqttLogEntry[] = [];
+  private readonly memory = new Map<string, unknown>();
   private readonly ctx: ProfileContext;
   private readonly handler: MessageHandler = (topic, payload) =>
     this.receive(topic, payload);
@@ -47,6 +50,8 @@ export class SimulatedDevice {
         this.publish(topic, payload, publishOptions),
       setSwitch: (index, output, source) =>
         this.setSwitch(index, output, source),
+      resetEnergy: (index) => this.resetEnergy(index),
+      memory: this.memory,
     } as Omit<ProfileContext, 'startedAt'> as ProfileContext;
     // Élő érték: az eszköz minden indításkor újraindítja az üzemidőt.
     Object.defineProperty(ctx, 'startedAt', {
@@ -73,6 +78,7 @@ export class SimulatedDevice {
     if (this.started || !this.profile) return;
     this.started = true;
     this.startedAt = new Date();
+    this.memory.clear();
     // Ugyanaz a kezelő minden mintán: így egy több mintára illeszkedő üzenet is egyszer érkezik.
     const patterns = [...new Set(this.profile.subscriptions(this.device))];
     this.unsubscribers = patterns.map((p) =>
@@ -117,19 +123,67 @@ export class SimulatedDevice {
    * is működik (mint a fizikai gomb hálózat nélkül), csak üzenet nem megy ki.
    */
   setSwitch(index: number, output: boolean, source: ChangeSource): boolean {
-    const state = this.device.switches.find((s) => s.index === index);
-    if (!state) throw new RangeError(`Nincs ${index}. kapcsoló az eszközön.`);
+    const state = this.switch(index);
+    commitMeterEnergy(state, new Date());
     const before = structuredClone(state);
     state.output = output;
     state.source = source;
+    this.changed(index, before, 'onSwitchChanged');
+    return before.output;
+  }
+
+  /** Mérőmezők állítása; a számláló előbb a régi teljesítménnyel rögzül. */
+  setMeter(index: number, patch: MeterPatch): void {
+    const state = this.switch(index);
+    if (!state.meter)
+      throw new RangeError(`A(z) ${index}. kapcsolónak nincs mérője.`);
+    commitMeterEnergy(state, new Date());
+    const before = structuredClone(state);
+    Object.assign(state.meter, patch);
+    this.changed(index, before, 'onMeterChanged');
+  }
+
+  resetEnergy(index: number): number {
+    const state = this.switch(index);
+    if (!state.meter)
+      throw new RangeError(`A(z) ${index}. kapcsolónak nincs mérője.`);
+    commitMeterEnergy(state, new Date());
+    const before = structuredClone(state);
+    state.meter.energyTotalWh = 0;
+    state.meter.energyTodayWh = 0;
+    state.meter.energyYesterdayWh = 0;
+    this.changed(index, before, 'onMeterChanged');
+    return before.meter!.energyTotalWh;
+  }
+
+  /** Rögzíti az összes számlálót a megadott pillanatig (mentés előtt). */
+  commitEnergy(now: Date): void {
+    for (const state of this.device.switches) commitMeterEnergy(state, now);
+  }
+
+  /** Igaz, ha valamelyik kimenet éppen fogyaszt, azaz a számláló nő. */
+  get isConsuming(): boolean {
+    return this.device.switches.some(
+      (s) => s.output && (s.meter?.loadPower ?? 0) > 0,
+    );
+  }
+
+  private switch(index: number) {
+    const state = this.device.switches.find((s) => s.index === index);
+    if (!state) throw new RangeError(`Nincs ${index}. kapcsoló az eszközön.`);
+    return state;
+  }
+
+  private changed(
+    index: number,
+    before: Device['switches'][number],
+    hook: 'onSwitchChanged' | 'onMeterChanged',
+  ): void {
     const profile = this.profile;
     if (this.online && profile) {
-      this.guard('onSwitchChanged', () =>
-        profile.onSwitchChanged(this.ctx, index, before),
-      );
+      this.guard(hook, () => profile[hook](this.ctx, index, before));
     }
     this.options.onStateChange(this);
-    return before.output;
   }
 
   private receive(topic: string, payload: Buffer): void {
