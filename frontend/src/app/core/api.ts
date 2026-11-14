@@ -5,6 +5,7 @@ import type {
   BrokerTestResult,
   CreateDeviceRequest,
   DeviceView,
+  HomeAssistantConfigResult,
   MqttLogEntry,
   SetSensorRequest,
   UpdateDeviceRequest,
@@ -73,6 +74,15 @@ export class Api {
     return this.http.post<DeviceView>(`/api/devices/${id}/switches/${index}/meter/reset`, {});
   }
 
+  homeAssistantConfig(
+    ids: string[] | null,
+    includeDiscovered: boolean,
+  ): Observable<HomeAssistantConfigResult> {
+    return this.http.get<HomeAssistantConfigResult>('/api/homeassistant/config', {
+      params: homeAssistantParams(ids, includeDiscovered),
+    });
+  }
+
   messages(id: string): Observable<MqttLogEntry[]> {
     return this.http.get<MqttLogEntry[]>(`/api/devices/${id}/messages`);
   }
@@ -97,4 +107,15 @@ export function errorMessage(err: unknown): string {
   if (Array.isArray(message)) return message.join('; ');
   if (typeof message === 'string') return message;
   return 'A szerver nem érhető el.';
+}
+
+/** A Home Assistant konfiguráció lekérdezési paraméterei; null: minden eszköz. */
+export function homeAssistantParams(
+  ids: string[] | null,
+  includeDiscovered: boolean,
+): Record<string, string> {
+  return {
+    ...(ids ? { ids: ids.join(',') } : {}),
+    ...(includeDiscovered ? { includeDiscovered: 'true' } : {}),
+  };
 }

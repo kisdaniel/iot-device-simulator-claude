@@ -2,6 +2,7 @@ import { Routes } from '@angular/router';
 import { DeviceDetail } from './devices/device-detail';
 import { DeviceForm } from './devices/device-form';
 import { DeviceList } from './devices/device-list';
+import { HomeAssistantPage } from './homeassistant/homeassistant-page';
 import { BrokerSettings } from './settings/broker-settings';
 
 export const routes: Routes = [
@@ -12,6 +13,11 @@ export const routes: Routes = [
     path: 'devices/:id/edit',
     component: DeviceForm,
     title: 'Eszköz szerkesztése – IoT szimulátor',
+  },
+  {
+    path: 'homeassistant',
+    component: HomeAssistantPage,
+    title: 'Home Assistant – IoT szimulátor',
   },
   { path: 'settings', component: BrokerSettings, title: 'Beállítások – IoT szimulátor' },
   { path: '**', redirectTo: '' },
