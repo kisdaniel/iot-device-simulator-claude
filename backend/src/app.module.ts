@@ -4,6 +4,7 @@ import { AppConfigModule } from './config/config.module.js';
 import { DevicesModule } from './devices/devices.module.js';
 import { EventsModule } from './events/events.module.js';
 import { HealthController } from './health/health.controller.js';
+import { HomeAssistantModule } from './homeassistant/homeassistant.module.js';
 import { SimulationModule } from './simulation/simulation.module.js';
 import { StorageModule } from './storage/storage.module.js';
 
@@ -15,6 +16,7 @@ import { StorageModule } from './storage/storage.module.js';
     BrokerModule,
     DevicesModule,
     SimulationModule,
+    HomeAssistantModule,
   ],
   controllers: [HealthController],
 })
