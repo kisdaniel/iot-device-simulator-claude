@@ -427,3 +427,91 @@ export interface HomeAssistantConfigResult {
   /** Figyelmeztetések (kihagyott eszközök, korlátozott állapotjelentés) */
   warnings: string[];
 }
+
+/** A JSON konfigurációs fájl formátumának verziója. */
+export const CONFIG_FILE_VERSION = 1;
+
+/**
+ * Az import módja. `seed`: csak üres adatbázisba tölt; `merge`: a fájlban szereplő
+ * eszközöket létrehozza vagy frissíti, a többit békén hagyja; `replace`: az eszközlista
+ * pontosan a fájl tartalma lesz.
+ */
+export type ImportMode = 'seed' | 'merge' | 'replace';
+export const IMPORT_MODES: readonly ImportMode[] = ['seed', 'merge', 'replace'];
+
+/** A mérő fájlban megadható mezői; a hiányzók az alapértéket (frissítésnél a meglévőt) kapják. */
+export type ConfigFileMeter = Partial<Omit<MeterState, 'energyUpdatedAt'>>;
+
+export interface ConfigFileSwitch {
+  index: number;
+  output?: boolean;
+  meter?: ConfigFileMeter;
+}
+
+export interface ConfigFileSensor {
+  index: number;
+  /** A DS18B20 64 bites címe (16 hex jegy); elhagyva a meglévő vagy egy új cím. */
+  address?: string;
+  tC?: number | null;
+  error?: TemperatureError | null;
+}
+
+export interface ConfigFileDevice {
+  name: string;
+  type: DeviceType;
+  enabled?: boolean;
+  shelly?: Partial<Omit<ShellyConfig, 'deviceId' | 'generation'>> &
+    Pick<ShellyConfig, 'deviceId' | 'generation'>;
+  tasmota?: Partial<Omit<TasmotaConfig, 'topic'>> &
+    Pick<TasmotaConfig, 'topic'>;
+  /** Kezdő vagy pillanatnyi állapot; elhagyva frissítésnél a meglévő marad. */
+  switches?: ConfigFileSwitch[];
+  sensors?: ConfigFileSensor[];
+}
+
+/** Az import és az export közös formátuma. */
+export interface ConfigFile {
+  version: typeof CONFIG_FILE_VERSION;
+  /** Az export ideje; importnál nincs jelentősége. */
+  exportedAt?: string;
+  /** A broker címe jelszó nélkül; környezeti változós beállításnál importkor figyelmen kívül marad. */
+  broker?: { url: string; username?: string | null } | null;
+  devices: ConfigFileDevice[];
+}
+
+/** Egy eszköz az import összesítőjében. */
+export interface ImportItem {
+  name: string;
+  type: DeviceType;
+  /** A Shelly deviceId, ill. a Tasmota topic: ez azonosítja az eszközt importkor. */
+  identity: string;
+}
+
+/** Az import (vagy a dryRun) eredménye. */
+export interface ImportSummary {
+  mode: ImportMode;
+  /** Igaz, ha az import ténylegesen beíródott (dryRun és kihagyott seed esetén hamis). */
+  applied: boolean;
+  /** `seed` módban igaz, ha az adatbázisban már voltak eszközök, ezért semmi sem történt. */
+  skipped: boolean;
+  created: ImportItem[];
+  updated: ImportItem[];
+  unchanged: ImportItem[];
+  removed: ImportItem[];
+  /** A broker szakasz sorsa: nincs a fájlban, változatlan, frissül, vagy (MQTT_URL miatt) figyelmen kívül marad. */
+  broker: 'absent' | 'unchanged' | 'updated' | 'ignored';
+}
+
+/** Mezőszintű importhiba; a `path` pl. `devices[2].shelly.generation`. */
+export interface ImportError {
+  path: string;
+  /** Az érintett eszköz neve a fájlból, ha a hiba egy eszközhöz tartozik. */
+  device?: string;
+  message: string;
+}
+
+/** A hibás importra adott 400-as válasz törzse. */
+export interface ImportErrorResponse {
+  message: string;
+  errors: ImportError[];
+}
