@@ -138,8 +138,7 @@ export class DevicesService {
       relayCount: t.relayCount,
       hasEnergy: t.hasEnergy,
       sensorCount: t.sensorCount,
-      // A discovery egy későbbi lépésben érkezik.
-      discovery: false,
+      discovery: t.discovery ?? false,
       telePeriod: t.telePeriod ?? TASMOTA_DEFAULTS.telePeriod,
       publishOnChange: t.publishOnChange ?? TASMOTA_DEFAULTS.publishOnChange,
       powerRetain: t.powerRetain ?? TASMOTA_DEFAULTS.powerRetain,
@@ -192,6 +191,7 @@ export class DevicesService {
       'telePeriod',
       'publishOnChange',
       'powerRetain',
+      'discovery',
     ] as const) {
       if (dto[key] !== undefined) Object.assign(config, { [key]: dto[key] });
     }
