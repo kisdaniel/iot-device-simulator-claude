@@ -8,12 +8,13 @@ import { DeviceStore } from '../core/device-store';
 import { EventStream } from '../core/event-stream';
 import { identity, shellyTopics, switchLabel, typeLabel } from './device-labels';
 import { MeterEditor } from './meter-editor';
+import { TemperatureEditor } from './temperature-editor';
 
 const LOG_LIMIT = 200;
 
 @Component({
   selector: 'app-device-detail',
-  imports: [RouterLink, DatePipe, MeterEditor],
+  imports: [RouterLink, DatePipe, MeterEditor, TemperatureEditor],
   templateUrl: './device-detail.html',
 })
 export class DeviceDetail {

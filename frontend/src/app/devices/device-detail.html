@@ -92,6 +92,19 @@
         </div>
       }
 
+      @if (d.sensors.length > 0) {
+        <div class="card mb-4">
+          <div class="card-header">Add-on hőmérők</div>
+          <ul class="list-group list-group-flush">
+            @for (sensor of d.sensors; track sensor.index) {
+              <li class="list-group-item">
+                <app-temperature-editor [device]="d" [state]="sensor" />
+              </li>
+            }
+          </ul>
+        </div>
+      }
+
       <div class="card">
         <div class="card-header">MQTT topicok</div>
         <ul class="list-group list-group-flush small">

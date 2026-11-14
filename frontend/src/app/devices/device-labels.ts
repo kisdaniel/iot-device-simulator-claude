@@ -1,5 +1,6 @@
 import {
   type Device,
+  SHELLY_ADDON_FIRST_ID,
   SHELLY_MODELS,
   type ShellyDeviceType,
   shellyTopicPrefix,
@@ -60,6 +61,15 @@ export function shellyTopics(device: Device): TopicRow[] {
         topic: `${prefix}/status/switch:${s.index}`,
         direction: 'ki',
         description: 'A kapcsoló teljes állapota',
+      });
+    }
+  }
+  if (config.statusNtf) {
+    for (const t of device.sensors) {
+      rows.push({
+        topic: `${prefix}/status/temperature:${SHELLY_ADDON_FIRST_ID + t.index}`,
+        direction: 'ki',
+        description: 'Az Add-on hőmérőjének állapota',
       });
     }
   }
