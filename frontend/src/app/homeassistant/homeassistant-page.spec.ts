@@ -28,6 +28,7 @@ function device(id: string, name: string): DeviceView {
 
 const result = (deviceCount: number) => ({
   yaml: 'mqtt:\n  switch: []\n',
+  compose: 'services:\n  homeassistant: {}\n',
   deviceCount,
   entityCount: deviceCount,
   warnings: [],
@@ -74,5 +75,16 @@ describe('HomeAssistantPage', () => {
     expect(element.querySelector('pre')).toBeNull();
     expect(element.textContent).toContain('Válassz ki legalább egy eszközt.');
     http.verify();
+
+    // A compose fül a kiválasztástól függetlenül látszik, a mentési útvonallal együtt.
+    const tabs = element.querySelectorAll<HTMLButtonElement>('.nav-link');
+    tabs[1].click();
+    await fixture.whenStable();
+    expect(element.querySelector('pre')?.textContent).toContain('homeassistant: {}');
+    expect(element.querySelector('[data-testid="save-hint"]')?.textContent).toContain(
+      'homeassistant/packages/iot_simulator.yaml',
+    );
+    expect(link.getAttribute('href')).toBe('/api/homeassistant/docker-compose.yml');
+    expect(link.classList).not.toContain('disabled');
   });
 });

@@ -2,9 +2,9 @@
   <h1 class="h3 mb-0 me-auto">Home Assistant konfiguráció</h1>
 </div>
 <p class="text-secondary mb-4">
-  MQTT-konfiguráció a <code>configuration.yaml</code>-ba: a kiválasztott eszközök kapcsolói és mért
-  értékei entitásként jelennek meg a Home Assistantben. A szimulátor brokeréhez kapcsolódó
-  MQTT-integráció kell hozzá.
+  MQTT-konfiguráció a kiválasztott eszközökből: a kapcsolók és a mért értékek entitásként jelennek
+  meg a Home Assistantben. Mellé egy <code>docker-compose.yml</code> is készül, amely Home
+  Assistantet és Mosquitto brokert indít, és betölti ezt a konfigurációt.
 </p>
 
 @if (!store.loaded()) {
@@ -89,12 +89,57 @@
           </div>
         }
         <div class="card">
-          <div class="card-header d-flex flex-wrap align-items-center gap-2">
-            <span class="me-auto">{{ r.deviceCount }} eszköz, {{ r.entityCount }} entitás</span>
+          <div class="card-header">
+            <ul class="nav nav-tabs card-header-tabs">
+              <li class="nav-item">
+                <button
+                  type="button"
+                  class="nav-link"
+                  [class.active]="view() === 'config'"
+                  [attr.aria-current]="view() === 'config' ? 'true' : null"
+                  (click)="show('config')"
+                >
+                  Home Assistant konfiguráció
+                </button>
+              </li>
+              <li class="nav-item">
+                <button
+                  type="button"
+                  class="nav-link"
+                  [class.active]="view() === 'compose'"
+                  [attr.aria-current]="view() === 'compose' ? 'true' : null"
+                  (click)="show('compose')"
+                >
+                  docker-compose.yml
+                </button>
+              </li>
+            </ul>
+          </div>
+          <div class="card-body border-bottom d-flex flex-wrap align-items-start gap-2 small">
+            <div class="me-auto" data-testid="save-hint">
+              @if (view() === 'config') {
+                <div>{{ r.deviceCount }} eszköz, {{ r.entityCount }} entitás.</div>
+                <div>
+                  Mentsd a <code>docker-compose.yml</code> mellé, ide:
+                  <code>{{ configPath }}</code>. Saját Home Assistantben a
+                  <code>configuration.yaml</code>-ba is másolható.
+                </div>
+              } @else {
+                <div>
+                  Mentsd egy üres mappába <code>docker-compose.yml</code> néven, a konfigurációt
+                  pedig mellé, ide: <code>{{ configPath }}</code>.
+                </div>
+                <div class="text-secondary">
+                  Indítás: <code>docker compose up -d</code>, majd a Home Assistantben egyszer vedd
+                  fel az MQTT-integrációt (broker: <code>mosquitto</code>, port: 1883). A szimulátor
+                  is ehhez a brokerhez kapcsolódjon.
+                </div>
+              }
+            </div>
             <button
               type="button"
               class="btn btn-sm btn-outline-secondary"
-              [disabled]="r.entityCount === 0"
+              [disabled]="!canExport()"
               (click)="copy()"
             >
               <i
@@ -108,19 +153,19 @@
             <a
               class="btn btn-sm btn-primary"
               [href]="downloadUrl()"
-              [class.disabled]="r.entityCount === 0"
+              [class.disabled]="!canExport()"
               download
             >
               <i class="bi bi-download" aria-hidden="true"></i> Letöltés
             </a>
           </div>
-          @if (r.deviceCount === 0) {
+          @if (view() === 'config' && r.deviceCount === 0) {
             <p class="card-body text-secondary mb-0">Válassz ki legalább egy eszközt.</p>
           } @else {
             <pre
               class="mb-0 p-3 small bg-body-tertiary"
               style="max-height: 40rem; overflow: auto"
-            ><code>{{ r.yaml }}</code></pre>
+            ><code>{{ content() }}</code></pre>
           }
         </div>
       } @else {
