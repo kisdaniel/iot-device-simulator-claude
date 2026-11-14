@@ -1,13 +1,21 @@
-import { Component, computed, effect, inject, signal } from '@angular/core';
+import { Component, computed, effect, inject, signal, untracked } from '@angular/core';
 import { RouterLink } from '@angular/router';
-import type { DeviceView, HomeAssistantConfigResult } from '@iot-sim/shared';
+import {
+  type DeviceView,
+  HOMEASSISTANT_CONFIG_PATH,
+  type HomeAssistantConfigResult,
+} from '@iot-sim/shared';
 import { Api, errorMessage, homeAssistantParams } from '../core/api';
 import { DeviceStore } from '../core/device-store';
 import { identity, typeLabel } from '../devices/device-labels';
 
+/** A két megjelenített fájl: a Home Assistant konfiguráció és a hozzá tartozó compose. */
+export type HomeAssistantView = 'config' | 'compose';
+
 /**
- * Home Assistant MQTT-konfiguráció a felvett eszközökből: kiválasztás, előnézet,
- * másolás és letöltés. A YAML-t a backend állítja elő, a felület csak megjeleníti.
+ * Home Assistant MQTT-konfiguráció a felvett eszközökből, és egy docker-compose.yml
+ * Home Assistanttel és Mosquittóval: kiválasztás, előnézet, másolás és letöltés. A fájlokat
+ * a backend állítja elő; a felület megmutatja, hová kell menteni őket.
  */
 @Component({
   selector: 'app-homeassistant-page',
@@ -24,6 +32,20 @@ export class HomeAssistantPage {
   protected readonly result = signal<HomeAssistantConfigResult | null>(null);
   protected readonly error = signal<string | null>(null);
   protected readonly copied = signal(false);
+  protected readonly view = signal<HomeAssistantView>('config');
+
+  /** Ide kell menteni a konfigurációt a docker-compose.yml mellé. */
+  protected readonly configPath = HOMEASSISTANT_CONFIG_PATH;
+
+  /** Az éppen látható fájl tartalma; ezt másolja a Másolás gomb. */
+  protected readonly content = computed(() => {
+    const result = this.result();
+    if (!result) return '';
+    return this.view() === 'compose' ? result.compose : result.yaml;
+  });
+  protected readonly canExport = computed(
+    () => this.view() === 'compose' || (this.result()?.entityCount ?? 0) > 0,
+  );
 
   protected readonly typeLabel = typeLabel;
   protected readonly identity = identity;
@@ -36,8 +58,9 @@ export class HomeAssistantPage {
   );
   protected readonly allSelected = computed(() => this.excluded().size === 0);
 
-  /** A letöltés címe a kiválasztás szerint. */
+  /** A letöltés címe: a compose független a kiválasztástól, a konfiguráció követi. */
   protected readonly downloadUrl = computed(() => {
+    if (this.view() === 'compose') return '/api/homeassistant/docker-compose.yml';
     const params = new URLSearchParams(
       homeAssistantParams(this.allSelected() ? null : this.selectedIds(), this.includeDiscovered()),
     ).toString();
@@ -51,7 +74,9 @@ export class HomeAssistantPage {
       const ids = this.allSelected() ? null : this.selectedIds();
       if (ids?.length === 0) {
         // Üres ids paraméter a backendnek „minden eszközt” jelentene.
-        this.result.set({ yaml: '', deviceCount: 0, entityCount: 0, warnings: [] });
+        // A compose nem függ a kiválasztástól, ezért az előző marad.
+        const compose = untracked(() => this.result()?.compose) ?? '';
+        this.result.set({ yaml: '', compose, deviceCount: 0, entityCount: 0, warnings: [] });
         this.error.set(null);
         return;
       }
@@ -82,15 +107,20 @@ export class HomeAssistantPage {
     this.excluded.set(selected ? new Set() : new Set(this.store.devices().map((d) => d.id)));
   }
 
+  protected show(view: HomeAssistantView): void {
+    this.view.set(view);
+    this.copied.set(false);
+  }
+
   protected setIncludeDiscovered(event: Event): void {
     this.includeDiscovered.set((event.target as HTMLInputElement).checked);
   }
 
   protected async copy(): Promise<void> {
-    const yaml = this.result()?.yaml;
-    if (!yaml) return;
+    const text = this.content();
+    if (!text) return;
     try {
-      await navigator.clipboard.writeText(yaml);
+      await navigator.clipboard.writeText(text);
       this.copied.set(true);
       setTimeout(() => this.copied.set(false), 2000);
     } catch {
