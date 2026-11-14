@@ -1,8 +1,12 @@
 import {
+  SHELLY_ADDON_MAX_SENSORS,
   SHELLY_DEVICE_TYPES,
   SHELLY_GENERATIONS,
   type ShellyDeviceType,
   type ShellyGeneration,
+  TEMPERATURE_MAX_C,
+  TEMPERATURE_MIN_C,
+  type TemperatureError,
 } from '@iot-sim/shared';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
@@ -10,6 +14,7 @@ import {
   IsBoolean,
   IsDefined,
   IsIn,
+  IsInt,
   IsNotEmpty,
   IsNumber,
   IsOptional,
@@ -25,6 +30,18 @@ import {
 const TOPIC_PREFIX = /^(?!\/)[^\s#+]*[^\s#+/]$/;
 const TOPIC_PREFIX_MESSAGE =
   'a topic-előtag nem tartalmazhat szóközt, # vagy + jelet, és nem kezdődhet vagy végződhet perjellel';
+
+export class AddonDto {
+  @ApiProperty()
+  @IsBoolean()
+  enabled: boolean;
+
+  @ApiProperty({ minimum: 0, maximum: SHELLY_ADDON_MAX_SENSORS, example: 1 })
+  @IsInt({ message: 'a hőmérők száma egész szám' })
+  @Min(0)
+  @Max(SHELLY_ADDON_MAX_SENSORS)
+  sensorCount: number;
+}
 
 export class CreateShellyDto {
   @ApiProperty({ enum: SHELLY_GENERATIONS, example: 3 })
@@ -64,6 +81,15 @@ export class CreateShellyDto {
   @IsOptional()
   @IsBoolean()
   enableControl?: boolean;
+
+  @ApiPropertyOptional({
+    type: AddonDto,
+    description: 'Add-on DS18B20 hőmérőkkel (1–5)',
+  })
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => AddonDto)
+  addon?: AddonDto;
 }
 
 export class CreateDeviceDto {
@@ -118,6 +144,15 @@ export class UpdateShellyDto {
   @IsOptional()
   @IsBoolean()
   enableControl?: boolean;
+
+  @ApiPropertyOptional({
+    type: AddonDto,
+    description: 'Add-on DS18B20 hőmérőkkel (1–5)',
+  })
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => AddonDto)
+  addon?: AddonDto;
 }
 
 export class UpdateDeviceDto {
@@ -191,4 +226,25 @@ export class SetMeterDto {
   @Min(0)
   @Max(1e12)
   energyTotalWh?: number;
+}
+
+export class SetSensorDto {
+  @ApiPropertyOptional({
+    description: `°C, ${TEMPERATURE_MIN_C} és ${TEMPERATURE_MAX_C} között, 0,1 fokra kerekítve`,
+    example: 21.5,
+  })
+  @IsOptional()
+  @IsNumber({}, { message: 'a hőmérséklet szám (°C)' })
+  @Min(TEMPERATURE_MIN_C)
+  @Max(TEMPERATURE_MAX_C)
+  tC?: number;
+
+  @ApiPropertyOptional({
+    enum: ['read', 'out_of_range'],
+    nullable: true,
+    description: 'Szenzorhiba szimulációja; null: nincs hiba',
+  })
+  @IsOptional()
+  @IsIn(['read', 'out_of_range'])
+  error?: TemperatureError | null;
 }

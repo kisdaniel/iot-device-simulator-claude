@@ -18,10 +18,13 @@ import { EventBus } from '../events/event-bus.service.js';
 import { defaultMeter } from '../simulation/meter.js';
 import { SimulationService } from '../simulation/simulation.service.js';
 import { DeviceStore } from '../storage/device.store.js';
-import type { MeterPatch } from '../simulation/device-profile.js';
+import type { MeterPatch, SensorPatch } from '../simulation/device-profile.js';
+import { resizeSensors } from '../simulation/sensors.js';
 import type {
+  AddonDto,
   CreateDeviceDto,
   SetMeterDto,
+  SetSensorDto,
   UpdateDeviceDto,
 } from './devices.dto.js';
 
@@ -57,7 +60,7 @@ export class DevicesService {
       rpcNtf: dto.shelly.rpcNtf ?? true,
       statusNtf: dto.shelly.statusNtf ?? true,
       enableControl: dto.shelly.enableControl ?? true,
-      addon: { enabled: false, sensorCount: 0 },
+      addon: normalizeAddon(dto.shelly.addon),
     };
     this.assertUnique(config);
 
@@ -76,7 +79,7 @@ export class DevicesService {
           meter: defaultMeter(now),
         }),
       ),
-      sensors: [],
+      sensors: resizeSensors([], config.addon.sensorCount),
     };
     await this.store.insert(device);
     return this.publish(this.simulation.load(device));
@@ -89,7 +92,13 @@ export class DevicesService {
     if (dto.shelly) {
       if (!device.shelly)
         throw new BadRequestException('Az eszköz nem Shelly eszköz.');
-      const { topicPrefix, rpcNtf, statusNtf, enableControl } = dto.shelly;
+      const { topicPrefix, rpcNtf, statusNtf, enableControl, addon } =
+        dto.shelly;
+      if (addon !== undefined) {
+        const normalized = normalizeAddon(addon);
+        device.sensors = resizeSensors(device.sensors, normalized.sensorCount);
+        device.shelly = { ...device.shelly, addon: normalized };
+      }
       device.shelly = {
         ...device.shelly,
         ...(topicPrefix !== undefined
@@ -101,7 +110,11 @@ export class DevicesService {
       };
       this.assertUnique(device.shelly, id);
     }
-    await this.store.update(device);
+    if (JSON.stringify(device.sensors) !== JSON.stringify(current.sensors)) {
+      await this.store.updateWithSensors(device);
+    } else {
+      await this.store.update(device);
+    }
     return this.publish(this.simulation.reconfigure(device));
   }
 
@@ -147,6 +160,18 @@ export class DevicesService {
     return this.simulation.setMeter(id, index, patch);
   }
 
+  setSensor(id: string, index: number, dto: SetSensorDto): DeviceView {
+    const device = this.get(id);
+    if (!device.sensors.some((s) => s.index === index)) {
+      throw new NotFoundException(`Nincs ${index}. hőmérő az eszközön.`);
+    }
+    const patch: SensorPatch = {};
+    // 0,1 °C a DS18B20 jelentési felbontása a felületen.
+    if (dto.tC !== undefined) patch.tC = Math.round(dto.tC * 10) / 10;
+    if (dto.error !== undefined) patch.error = dto.error;
+    return this.simulation.setSensor(id, index, patch);
+  }
+
   resetEnergy(id: string, index: number): DeviceView {
     this.meterSwitch(id, index);
     return this.simulation.resetEnergy(id, index);
@@ -188,4 +213,15 @@ export class DevicesService {
     this.bus.emit({ type: 'device.updated', data: view });
     return view;
   }
+}
+
+/** Kikapcsolt Add-onon nincs hőmérő; bekapcsolva legalább egy kell. */
+function normalizeAddon(addon: AddonDto | undefined): ShellyConfig['addon'] {
+  if (!addon?.enabled) return { enabled: false, sensorCount: 0 };
+  if (addon.sensorCount < 1) {
+    throw new BadRequestException(
+      'Bekapcsolt Add-onhoz legalább egy hőmérő kell (1–5).',
+    );
+  }
+  return { enabled: true, sensorCount: addon.sensorCount };
 }
