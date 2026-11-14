@@ -15,6 +15,7 @@ import {
   shellyConfig,
   shellyTimestamp,
   switchConfig,
+  type ShellyTimer,
   switchStatus,
   temperatureConfig,
   temperatureId,
@@ -101,12 +102,22 @@ export class ShellyProfile implements DeviceProfile {
     }
   }
 
+  /**
+   * Minden kapcsolás megszakítja a futó időzítőt, kivéve azt, amelyet éppen ez a
+   * parancs indít (`toggle_after`); a lejárt időzítő visszakapcsolása is törli.
+   */
   onSwitchChanged(
     ctx: ProfileContext,
     index: number,
     before: SwitchState,
   ): void {
-    this.notifyChange(ctx, index, before);
+    const timers = timerState(ctx);
+    const timerBefore = timers.get(index);
+    const arming = ctx.memory.get(ARMING_KEY) as Arming | undefined;
+    const next = arming?.index === index ? arming.timer : undefined;
+    if (next) timers.set(index, next);
+    else timers.delete(index);
+    this.notifyChange(ctx, index, before, timerBefore);
   }
 
   onMeterChanged(
@@ -125,7 +136,8 @@ export class ShellyProfile implements DeviceProfile {
         base + energyAt(state, now).total - energyAt(before, now).total,
       );
     }
-    this.notifyChange(ctx, index, before);
+    const timer = timerState(ctx).get(index);
+    this.notifyChange(ctx, index, before, timer);
   }
 
   /**
@@ -162,6 +174,14 @@ export class ShellyProfile implements DeviceProfile {
    * jelentése (NotifyStatus és status/switch:N).
    */
   onTick(ctx: ProfileContext, now: Date): void {
+    // A lejárt időzítők visszakapcsolnak (a közös óra másodperces pontosságával).
+    // A bejárás közbeni törlés (setSwitch → onSwitchChanged) a Map-en biztonságos.
+    for (const [index, timer] of timerState(ctx)) {
+      if (now.getTime() >= timer.startedAt + timer.duration * 1000) {
+        ctx.setSwitch(index, timer.flipTo, 'timer');
+      }
+    }
+
     const minute = Math.floor(now.getTime() / 60_000);
     const minutes = minuteState(ctx);
     if (minutes.current === undefined) {
@@ -188,7 +208,12 @@ export class ShellyProfile implements DeviceProfile {
       ]);
       minutes.base.set(state.index, energy);
 
-      const status = switchStatus(state, now, byMinute(ctx, state.index));
+      const status = switchStatus(
+        state,
+        now,
+        byMinute(ctx, state.index),
+        timerState(ctx).get(state.index),
+      );
       params[`switch:${state.index}`] = {
         id: state.index,
         aenergy: status.aenergy,
@@ -211,6 +236,7 @@ export class ShellyProfile implements DeviceProfile {
     ctx: ProfileContext,
     index: number,
     before: SwitchState,
+    timerBefore: ShellyTimer | undefined,
   ): void {
     const config = shellyConfig(ctx.device);
     const prefix = shellyTopicPrefix(config);
@@ -218,8 +244,12 @@ export class ShellyProfile implements DeviceProfile {
     if (!state) return;
 
     const now = new Date();
-    const after = switchStatus(state, now, byMinute(ctx, index));
-    const changed = changedFields(switchStatus(before, now), after);
+    const minutes = byMinute(ctx, index);
+    const after = switchStatus(state, now, minutes, timerState(ctx).get(index));
+    const changed = changedFields(
+      switchStatus(before, now, minutes, timerBefore),
+      after,
+    );
     if (Object.keys(changed).length === 0) return;
 
     if (config.rpcNtf) {
@@ -272,13 +302,18 @@ export class ShellyProfile implements DeviceProfile {
         if (typeof params.on !== 'boolean') {
           throw new RpcError(-103, "Missing required argument 'on'!");
         }
-        if (params.toggle_after !== undefined) {
-          throw new RpcError(
-            -103,
-            'toggle_after is not supported by the simulator',
-          );
+        const toggleAfter = params.toggle_after;
+        if (
+          toggleAfter !== undefined &&
+          (typeof toggleAfter !== 'number' ||
+            !Number.isFinite(toggleAfter) ||
+            toggleAfter <= 0)
+        ) {
+          throw new RpcError(-103, "Invalid argument 'toggle_after'!");
         }
-        return { was_on: ctx.setSwitch(state.index, params.on, 'MQTT') };
+        return {
+          was_on: setWithTimer(ctx, state.index, params.on, toggleAfter),
+        };
       }
       case 'switch.toggle': {
         const state = this.switchParam(ctx, params);
@@ -302,8 +337,12 @@ export class ShellyProfile implements DeviceProfile {
       case 'switch.getconfig':
         return switchConfig(this.switchParam(ctx, params));
       case 'shelly.getstatus':
-        return fullStatus(ctx.device, ctx.startedAt, now, (index) =>
-          byMinute(ctx, index),
+        return fullStatus(
+          ctx.device,
+          ctx.startedAt,
+          now,
+          (index) => byMinute(ctx, index),
+          (index) => timerState(ctx).get(index),
         );
       case 'shelly.getdeviceinfo':
         return deviceInfo(ctx.device);
@@ -317,7 +356,12 @@ export class ShellyProfile implements DeviceProfile {
     state: SwitchState,
     now: Date,
   ): Record<string, unknown> {
-    return switchStatus(state, now, byMinute(ctx, state.index));
+    return switchStatus(
+      state,
+      now,
+      byMinute(ctx, state.index),
+      timerState(ctx).get(state.index),
+    );
   }
 
   private sensorParam(
@@ -358,8 +402,12 @@ export class ShellyProfile implements DeviceProfile {
     if (command === 'status_update') {
       ctx.publish(
         `${prefix}/status`,
-        fullStatus(ctx.device, ctx.startedAt, now, (index) =>
-          byMinute(ctx, index),
+        fullStatus(
+          ctx.device,
+          ctx.startedAt,
+          now,
+          (index) => byMinute(ctx, index),
+          (index) => timerState(ctx).get(index),
         ),
       );
       this.publishComponentStatuses(ctx, now);
@@ -381,6 +429,13 @@ export class ShellyProfile implements DeviceProfile {
       ? ctx.device.switches.find((s) => s.index === Number(match[1]))
       : undefined;
     if (!state) return;
+
+    // on,<mp> és off,<mp>: kapcsolás visszakapcsolási időzítővel.
+    const timed = /^(on|off),\s*(\d+(?:\.\d+)?)$/.exec(command);
+    if (timed && Number(timed[2]) > 0) {
+      setWithTimer(ctx, state.index, timed[1] === 'on', Number(timed[2]));
+      return;
+    }
 
     switch (command) {
       case 'on':
@@ -428,6 +483,50 @@ interface MinuteState {
   base: Map<number, number>;
   /** Az utolsó három lezárt perc energiája (mWh), legújabb elöl. */
   byMinute: Map<number, number[]>;
+}
+
+/** A memóriakulcs, amely alatt a kapcsolónkénti időzítők élnek. */
+const TIMERS_KEY = 'timers';
+/** Az éppen végrehajtott, időzítőt indító kapcsolás; az onSwitchChanged ebből tudja, hogy ne törölje. */
+const ARMING_KEY = 'arming';
+
+interface Arming {
+  index: number;
+  timer: ShellyTimer;
+}
+
+function timerState(ctx: ProfileContext): Map<number, ShellyTimer> {
+  let timers = ctx.memory.get(TIMERS_KEY) as
+    Map<number, ShellyTimer> | undefined;
+  if (!timers) {
+    timers = new Map();
+    ctx.memory.set(TIMERS_KEY, timers);
+  }
+  return timers;
+}
+
+/**
+ * Kapcsolás MQTT-parancsra, opcionális visszakapcsolási időzítővel. Időzítő nélkül
+ * a futó időzítő megszakad; időzítővel az új a régi helyére lép, akkor is, ha a
+ * kimenet már a kért állapotban volt. Visszaadja, hogy be volt-e kapcsolva.
+ */
+function setWithTimer(
+  ctx: ProfileContext,
+  index: number,
+  on: boolean,
+  toggleAfter: number | undefined,
+): boolean {
+  if (toggleAfter === undefined) return ctx.setSwitch(index, on, 'MQTT');
+  const arming: Arming = {
+    index,
+    timer: { startedAt: Date.now(), duration: toggleAfter, flipTo: !on },
+  };
+  ctx.memory.set(ARMING_KEY, arming);
+  try {
+    return ctx.setSwitch(index, on, 'MQTT');
+  } finally {
+    ctx.memory.delete(ARMING_KEY);
+  }
 }
 
 function minuteState(ctx: ProfileContext): MinuteState {

@@ -47,6 +47,28 @@ describe('Shelly állapotok', () => {
     expect(shellyMac(device(type, gen).shelly!)).toBe('A8032ABE54DC');
   });
 
+  it('futó időzítőnél a timer mezők is szerepelnek, egyébként nem', () => {
+    const now = new Date('2026-11-14T10:35:42Z');
+    const state = {
+      index: 0,
+      output: true,
+      source: 'MQTT',
+      meter: defaultMeter(),
+    };
+    expect(switchStatus(state, now)).not.toHaveProperty('timer_started_at');
+    expect(
+      switchStatus(state, now, [0, 0, 0], {
+        startedAt: Date.parse('2026-11-14T10:35:40.256Z'),
+        duration: 30,
+        flipTo: false,
+      }),
+    ).toMatchObject({
+      timer_started_at: 1794652540.26,
+      timer_duration: 30,
+      timer_type: 'toggle_after',
+    });
+  });
+
   it('a kapcsoló állapota kerekített mért értékekkel', () => {
     const now = new Date('2026-11-14T10:35:42Z');
     const status = switchStatus(
