@@ -18,7 +18,12 @@ import { EventBus } from '../events/event-bus.service.js';
 import { defaultMeter } from '../simulation/meter.js';
 import { SimulationService } from '../simulation/simulation.service.js';
 import { DeviceStore } from '../storage/device.store.js';
-import type { CreateDeviceDto, UpdateDeviceDto } from './devices.dto.js';
+import type { MeterPatch } from '../simulation/device-profile.js';
+import type {
+  CreateDeviceDto,
+  SetMeterDto,
+  UpdateDeviceDto,
+} from './devices.dto.js';
 
 /** Eszközkezelés: a tárolás és a futó szimuláció összehangolása. */
 @Injectable()
@@ -126,9 +131,39 @@ export class DevicesService {
     return this.simulation.setSwitch(id, index, value, 'button');
   }
 
+  setMeter(id: string, index: number, dto: SetMeterDto): DeviceView {
+    this.meterSwitch(id, index);
+    const patch: MeterPatch = {};
+    for (const key of [
+      'loadPower',
+      'voltage',
+      'currentOverride',
+      'powerFactor',
+      'frequency',
+      'energyTotalWh',
+    ] as const) {
+      if (dto[key] !== undefined) Object.assign(patch, { [key]: dto[key] });
+    }
+    return this.simulation.setMeter(id, index, patch);
+  }
+
+  resetEnergy(id: string, index: number): DeviceView {
+    this.meterSwitch(id, index);
+    return this.simulation.resetEnergy(id, index);
+  }
+
   messages(id: string): readonly MqttLogEntry[] {
     this.get(id);
     return this.simulation.messages(id) ?? [];
+  }
+
+  private meterSwitch(id: string, index: number): void {
+    const state = this.get(id).switches.find((s) => s.index === index);
+    if (!state)
+      throw new NotFoundException(`Nincs ${index}. kapcsoló az eszközön.`);
+    if (!state.meter) {
+      throw new BadRequestException(`A(z) ${index}. kapcsolónak nincs mérője.`);
+    }
   }
 
   /** Az eszközazonosító és a ténylegesen használt topic-előtag is egyedi. */

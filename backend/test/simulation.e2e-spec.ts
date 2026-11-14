@@ -41,6 +41,7 @@ const echoProfile: DeviceProfile = {
     });
   },
   onSwitchChanged: () => undefined,
+  onMeterChanged: () => undefined,
   onTick: (ctx, now) => {
     ctx.publish(`tele/${ctx.device.tasmota!.topic}/TICK`, now.toISOString());
   },

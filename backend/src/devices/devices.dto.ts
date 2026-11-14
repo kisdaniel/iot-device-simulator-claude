@@ -11,10 +11,13 @@ import {
   IsDefined,
   IsIn,
   IsNotEmpty,
+  IsNumber,
   IsOptional,
   IsString,
   Matches,
+  Max,
   MaxLength,
+  Min,
   ValidateNested,
 } from 'class-validator';
 
@@ -136,4 +139,56 @@ export class SetSwitchDto {
   @ApiProperty()
   @IsBoolean()
   output: boolean;
+}
+
+/** A mérő állítható mezői; csak a megadottak változnak. */
+export class SetMeterDto {
+  @ApiPropertyOptional({
+    description: 'W, a terhelés bekapcsolt kimenetnél',
+    example: 1200,
+  })
+  @IsOptional()
+  @IsNumber({}, { message: 'a terhelés szám (W)' })
+  @Min(0)
+  @Max(10_000)
+  loadPower?: number;
+
+  @ApiPropertyOptional({ description: 'V', example: 230 })
+  @IsOptional()
+  @IsNumber({}, { message: 'a feszültség szám (V)' })
+  @Min(0)
+  @Max(300)
+  voltage?: number;
+
+  @ApiPropertyOptional({
+    nullable: true,
+    type: Number,
+    description: 'A; null: a terhelésből és a feszültségből számolt',
+  })
+  @IsOptional()
+  @IsNumber({}, { message: 'az áramerősség szám (A)' })
+  @Min(0)
+  @Max(100)
+  currentOverride?: number | null;
+
+  @ApiPropertyOptional({ example: 1 })
+  @IsOptional()
+  @IsNumber({}, { message: 'a teljesítménytényező szám' })
+  @Min(0)
+  @Max(1)
+  powerFactor?: number;
+
+  @ApiPropertyOptional({ description: 'Hz', example: 50 })
+  @IsOptional()
+  @IsNumber({}, { message: 'a frekvencia szám (Hz)' })
+  @Min(45)
+  @Max(65)
+  frequency?: number;
+
+  @ApiPropertyOptional({ description: 'Wh, a számláló új értéke' })
+  @IsOptional()
+  @IsNumber({}, { message: 'a számláló értéke szám (Wh)' })
+  @Min(0)
+  @Max(1e12)
+  energyTotalWh?: number;
 }
