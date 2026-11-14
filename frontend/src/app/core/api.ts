@@ -6,6 +6,9 @@ import type {
   CreateDeviceRequest,
   DeviceView,
   HomeAssistantConfigResult,
+  ImportError,
+  ImportMode,
+  ImportSummary,
   MqttLogEntry,
   SetSensorRequest,
   UpdateDeviceRequest,
@@ -74,6 +77,13 @@ export class Api {
     return this.http.post<DeviceView>(`/api/devices/${id}/switches/${index}/meter/reset`, {});
   }
 
+  /** Import vagy (dryRun) előnézet; hibás fájlnál 400 a mezőszintű hibákkal. */
+  importConfig(file: unknown, mode: ImportMode, dryRun: boolean): Observable<ImportSummary> {
+    return this.http.post<ImportSummary>('/api/config/import', file, {
+      params: { mode, dryRun: String(dryRun) },
+    });
+  }
+
   homeAssistantConfig(
     ids: string[] | null,
     includeDiscovered: boolean,
@@ -107,6 +117,17 @@ export function errorMessage(err: unknown): string {
   if (Array.isArray(message)) return message.join('; ');
   if (typeof message === 'string') return message;
   return 'A szerver nem érhető el.';
+}
+
+/** A konfiguráció letöltésének címe, állapottal vagy anélkül. */
+export function exportConfigUrl(includeState: boolean): string {
+  return `/api/config/export?includeState=${includeState}`;
+}
+
+/** A hibás importra adott válasz mezőszintű hibái; más hibánál üres lista. */
+export function importErrors(err: unknown): ImportError[] {
+  const errors = (err as { error?: { errors?: unknown } })?.error?.errors;
+  return Array.isArray(errors) ? (errors as ImportError[]) : [];
 }
 
 /** A Home Assistant konfiguráció lekérdezési paraméterei; null: minden eszköz. */
