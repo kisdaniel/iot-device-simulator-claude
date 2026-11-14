@@ -1,11 +1,14 @@
 import {
   type Device,
+  SHELLY_ADDON_FIRST_ID,
   SHELLY_MODELS,
   type ShellyConfig,
   type ShellyDeviceType,
   type SwitchState,
+  type TemperatureState,
 } from '@iot-sim/shared';
 import { readMeter, round } from '../../meter.js';
+import { reportedTemperature } from '../../sensors.js';
 
 /** A szimulált eszköz belső hőmérséklete: rögzített, nem állítható. */
 const DEVICE_TEMPERATURE_C = 45;
@@ -58,6 +61,46 @@ export function switchStatus(
       tF: round((DEVICE_TEMPERATURE_C * 9) / 5 + 32, 1),
     },
   };
+}
+
+/** Az Add-on hőmérőjének komponensazonosítója: temperature:100, 101, … */
+export function temperatureId(state: TemperatureState): number {
+  return SHELLY_ADDON_FIRST_ID + state.index;
+}
+
+/** A `temperature:<id>` komponens állapota; hiba esetén nincs érték, csak a hiba. */
+export function temperatureStatus(
+  state: TemperatureState,
+): Record<string, unknown> {
+  const tC = reportedTemperature(state);
+  return {
+    id: temperatureId(state),
+    tC: tC === null ? null : round(tC, 1),
+    tF: tC === null ? null : round((tC * 9) / 5 + 32, 1),
+    ...(state.error ? { errors: [state.error] } : {}),
+  };
+}
+
+/** Temperature.GetConfig: a valós eszköz alapértékei. */
+export function temperatureConfig(
+  state: TemperatureState,
+): Record<string, unknown> {
+  return {
+    id: temperatureId(state),
+    name: null,
+    report_thr_C: 0.5,
+    offset_C: 0,
+  };
+}
+
+/** SensorAddon.GetPeripherals: a DS18B20 címek a Shelly formájában (tizedes bájtok). */
+export function addonPeripherals(device: Device): Record<string, unknown> {
+  const ds18b20: Record<string, unknown> = {};
+  for (const state of device.sensors) {
+    const addr = [...Buffer.from(state.address, 'hex')].join(':');
+    ds18b20[`temperature:${temperatureId(state)}`] = { addr };
+  }
+  return { digital_in: {}, ds18b20, dht22: {}, analog_in: {}, voltmeter: {} };
 }
 
 /** Minimális kapcsolókonfiguráció (Switch.GetConfig). */
@@ -122,6 +165,8 @@ export function fullStatus(
       now,
       byMinute(state.index),
     );
+  for (const state of device.sensors)
+    status[`temperature:${temperatureId(state)}`] = temperatureStatus(state);
   return status;
 }
 

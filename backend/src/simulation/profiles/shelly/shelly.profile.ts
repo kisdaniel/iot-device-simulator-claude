@@ -3,10 +3,12 @@ import {
   type ShellyDeviceType,
   shellyTopicPrefix,
   type SwitchState,
+  type TemperatureState,
 } from '@iot-sim/shared';
 import type { DeviceProfile, ProfileContext } from '../../device-profile.js';
 import { energyAt, round } from '../../meter.js';
 import {
+  addonPeripherals,
   changedFields,
   deviceInfo,
   fullStatus,
@@ -14,6 +16,9 @@ import {
   shellyTimestamp,
   switchConfig,
   switchStatus,
+  temperatureConfig,
+  temperatureId,
+  temperatureStatus,
 } from './shelly-status.js';
 
 const BROADCAST_COMMAND_TOPIC = 'shellies/command';
@@ -121,6 +126,35 @@ export class ShellyProfile implements DeviceProfile {
       );
     }
     this.notifyChange(ctx, index, before);
+  }
+
+  /**
+   * A hőmérő minden kézi változásáról értesít. A valós eszköz csak 0,5 °C-nál
+   * nagyobb változást jelent; teszteléshez a minden változás hasznosabb.
+   */
+  onSensorChanged(
+    ctx: ProfileContext,
+    index: number,
+    before: TemperatureState,
+  ): void {
+    const config = shellyConfig(ctx.device);
+    const prefix = shellyTopicPrefix(config);
+    const state = ctx.device.sensors.find((s) => s.index === index);
+    if (!state) return;
+    const after = temperatureStatus(state);
+    if (JSON.stringify(after) === JSON.stringify(temperatureStatus(before))) {
+      return;
+    }
+    const component = `temperature:${temperatureId(state)}`;
+    if (config.rpcNtf) {
+      ctx.publish(`${prefix}/events/rpc`, {
+        src: config.deviceId,
+        dst: `${prefix}/events`,
+        method: 'NotifyStatus',
+        params: { ts: shellyTimestamp(new Date()), [component]: after },
+      });
+    }
+    if (config.statusNtf) ctx.publish(`${prefix}/status/${component}`, after);
   }
 
   /**
@@ -256,6 +290,15 @@ export class ShellyProfile implements DeviceProfile {
         const state = this.switchParam(ctx, params);
         return { aenergy: { total: round(ctx.resetEnergy(state.index), 3) } };
       }
+      case 'temperature.getstatus':
+        return temperatureStatus(this.sensorParam(ctx, params));
+      case 'temperature.getconfig':
+        return temperatureConfig(this.sensorParam(ctx, params));
+      case 'sensoraddon.getperipherals':
+        if (ctx.device.sensors.length === 0) {
+          throw new RpcError(404, `No handler for ${method}`);
+        }
+        return addonPeripherals(ctx.device);
       case 'switch.getconfig':
         return switchConfig(this.switchParam(ctx, params));
       case 'shelly.getstatus':
@@ -275,6 +318,25 @@ export class ShellyProfile implements DeviceProfile {
     now: Date,
   ): Record<string, unknown> {
     return switchStatus(state, now, byMinute(ctx, state.index));
+  }
+
+  private sensorParam(
+    ctx: ProfileContext,
+    params: RpcParams,
+  ): TemperatureState {
+    if (params.id === undefined) {
+      throw new RpcError(-103, "Missing required argument 'id'!");
+    }
+    const state = ctx.device.sensors.find(
+      (s) => temperatureId(s) === params.id,
+    );
+    if (!state) {
+      throw new RpcError(
+        -105,
+        `Argument 'id', value ${JSON.stringify(params.id)} not found!`,
+      );
+    }
+    return state;
   }
 
   private switchParam(ctx: ProfileContext, params: RpcParams): SwitchState {
@@ -348,6 +410,12 @@ export class ShellyProfile implements DeviceProfile {
       ctx.publish(
         `${prefix}/status/switch:${state.index}`,
         this.status(ctx, state, now),
+      );
+    }
+    for (const state of ctx.device.sensors) {
+      ctx.publish(
+        `${prefix}/status/temperature:${temperatureId(state)}`,
+        temperatureStatus(state),
       );
     }
   }
