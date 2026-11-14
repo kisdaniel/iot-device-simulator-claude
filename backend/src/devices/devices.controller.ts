@@ -15,6 +15,7 @@ import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import {
   CreateDeviceDto,
   SetMeterDto,
+  SetSensorDto,
   SetSwitchDto,
   UpdateDeviceDto,
 } from './devices.dto.js';
@@ -125,6 +126,18 @@ export class DevicesController {
     @Param('index', ParseIntPipe) index: number,
   ): DeviceView {
     return this.devices.resetEnergy(id, index);
+  }
+
+  @Put(':id/sensors/:index')
+  @ApiOperation({
+    summary: 'Hőmérő értéke (°C) vagy szenzorhiba szimulációja',
+  })
+  setSensor(
+    @Param('id') id: string,
+    @Param('index', ParseIntPipe) index: number,
+    @Body() dto: SetSensorDto,
+  ): DeviceView {
+    return this.devices.setSensor(id, index, dto);
   }
 
   @Get(':id/messages')
