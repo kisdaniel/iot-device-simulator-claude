@@ -4,9 +4,11 @@ import type {
   ShellyConfig,
   SwitchState,
   TasmotaConfig,
+  TemperatureState,
 } from '@iot-sim/shared';
-import type { DeviceEntity } from '../storage/entities/device.entity.js';
-import type { SwitchEntity } from '../storage/entities/switch.entity.js';
+import { DeviceEntity } from './entities/device.entity.js';
+import { SwitchEntity } from './entities/switch.entity.js';
+import { TemperatureSensorEntity } from './entities/temperature-sensor.entity.js';
 
 function toMeter(row: SwitchEntity): MeterState | undefined {
   if (row.loadPower === null) return undefined;
@@ -33,6 +35,11 @@ function toSwitch(row: SwitchEntity): SwitchState {
   };
 }
 
+/** A Shelly deviceId, ill. a Tasmota topic: az eszközök között egyedi azonosító. */
+export function deviceIdentity(device: Device): string {
+  return device.shelly?.deviceId ?? device.tasmota?.topic ?? device.id;
+}
+
 /** Adatbázissorokból a közös `Device` típus. */
 export function toDevice(entity: DeviceEntity): Device {
   const config = JSON.parse(entity.config) as ShellyConfig | TasmotaConfig;
@@ -55,5 +62,59 @@ export function toDevice(entity: DeviceEntity): Device {
         tC: s.tc,
         error: s.error,
       })),
+  };
+}
+
+export function toSwitchEntity(
+  deviceId: string,
+  state: SwitchState,
+): SwitchEntity {
+  const row = new SwitchEntity();
+  const meter = state.meter;
+  Object.assign(row, {
+    deviceId,
+    idx: state.index,
+    output: state.output,
+    source: state.source,
+    loadPower: meter?.loadPower ?? null,
+    voltage: meter?.voltage ?? null,
+    currentOverride: meter?.currentOverride ?? null,
+    powerFactor: meter?.powerFactor ?? null,
+    frequency: meter?.frequency ?? null,
+    energyTotalWh: meter?.energyTotalWh ?? null,
+    energyTodayWh: meter?.energyTodayWh ?? null,
+    energyYesterdayWh: meter?.energyYesterdayWh ?? null,
+    energyUpdatedAt: meter?.energyUpdatedAt ?? null,
+  });
+  return row;
+}
+
+export function toSensorEntity(
+  deviceId: string,
+  state: TemperatureState,
+): TemperatureSensorEntity {
+  const row = new TemperatureSensorEntity();
+  Object.assign(row, {
+    deviceId,
+    idx: state.index,
+    address: state.address,
+    tc: state.tC,
+    error: state.error,
+  });
+  return row;
+}
+
+/** A `devices` sor oszlopai egy `Device`-ból (kapcsolók és szenzorok nélkül). */
+export function deviceColumns(
+  device: Device,
+): Pick<DeviceEntity, 'name' | 'type' | 'enabled' | 'config' | 'identity'> {
+  return {
+    name: device.name,
+    type: device.type,
+    enabled: device.enabled,
+    config: JSON.stringify(
+      device.type === 'tasmota' ? device.tasmota : device.shelly,
+    ),
+    identity: deviceIdentity(device),
   };
 }
