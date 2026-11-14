@@ -1,5 +1,5 @@
 import type { SwitchState } from '@iot-sim/shared';
-import { formatEnergy, meterValues } from './meter-values';
+import { formatEnergy, meterActive, meterValues } from './meter-values';
 
 const t0 = Date.parse('2026-11-14T10:00:00Z');
 
@@ -32,6 +32,14 @@ describe('meterValues', () => {
 
   it('kikapcsolva minden érték áll', () => {
     expect(meterValues(state(false), t0 + 10_000)).toEqual({ power: 0, current: 0, energy: 100 });
+  });
+});
+
+describe('meterActive', () => {
+  it('a Tasmota mérője bármelyik bekapcsolt relére aktív, a Shellyé csak a sajátjára', () => {
+    const switches = [state(false), { ...state(false), index: 1, output: true }];
+    expect(meterActive({ type: 'tasmota', switches } as never, switches[0])).toBe(true);
+    expect(meterActive({ type: 'shelly-2pm', switches } as never, switches[0])).toBe(false);
   });
 });
 

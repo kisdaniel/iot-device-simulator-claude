@@ -1,7 +1,7 @@
 <div class="d-flex align-items-baseline justify-content-between mb-2">
   <span class="fw-semibold">
     Hőmérő {{ state().index + 1 }}
-    <code class="small fw-normal">temperature:{{ componentId() }}</code>
+    <code class="small fw-normal">{{ key() }}</code>
   </span>
   @if (state().error) {
     <span class="badge text-bg-danger">Szenzorhiba</span>

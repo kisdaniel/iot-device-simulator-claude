@@ -28,19 +28,21 @@
                 <select id="type" class="form-select" formControlName="type">
                   <option value="shelly-1pm">Shelly 1PM (1 kapcsoló)</option>
                   <option value="shelly-2pm">Shelly 2PM (2 kapcsoló)</option>
-                  <option disabled>Tasmota (hamarosan)</option>
+                  <option value="tasmota">Tasmota</option>
                 </select>
               </div>
-              <div class="col-sm-6">
-                <label for="generation" class="form-label">Generáció</label>
-                <select id="generation" class="form-select" formControlName="generation">
-                  @for (gen of generations; track gen) {
-                    <option [ngValue]="gen">
-                      {{ models[form.controls.type.value][gen].name }}
-                    </option>
-                  }
-                </select>
-              </div>
+              @if (!isTasmota()) {
+                <div class="col-sm-6" formGroupName="shelly">
+                  <label for="generation" class="form-label">Generáció</label>
+                  <select id="generation" class="form-select" formControlName="generation">
+                    @for (gen of generations; track gen) {
+                      <option [ngValue]="gen">
+                        {{ generationName(gen) }}
+                      </option>
+                    }
+                  </select>
+                </div>
+              }
 
               <div class="col-12">
                 <label for="name" class="form-label">Név</label>
@@ -80,105 +82,225 @@
                   <div class="invalid-feedback">12 hexadecimális jegy, elválasztó nélkül.</div>
                 </div>
               </div>
-              <div class="col-sm-6">
-                <label for="topicPrefix" class="form-label">Topic-előtag</label>
-                <input
-                  id="topicPrefix"
-                  type="text"
-                  class="form-control font-monospace"
-                  formControlName="topicPrefix"
-                  [placeholder]="preview().deviceId"
-                  [class.is-invalid]="invalid('topicPrefix')"
-                />
-                <div class="form-text">Üresen az eszközazonosító.</div>
-                <div class="invalid-feedback">
-                  Nem lehet benne szóköz, # vagy +, és perjel a két végén.
-                </div>
-              </div>
 
-              <div class="col-12">
-                <span class="form-label d-block">MQTT</span>
-                <div class="form-check form-switch">
-                  <input
-                    id="rpcNtf"
-                    class="form-check-input"
-                    type="checkbox"
-                    role="switch"
-                    formControlName="rpcNtf"
-                  />
-                  <label for="rpcNtf" class="form-check-label"
-                    >RPC-értesítések (<code>events/rpc</code>)</label
-                  >
-                </div>
-                <div class="form-check form-switch">
-                  <input
-                    id="statusNtf"
-                    class="form-check-input"
-                    type="checkbox"
-                    role="switch"
-                    formControlName="statusNtf"
-                  />
-                  <label for="statusNtf" class="form-check-label"
-                    >Állapotüzenetek (<code>status/…</code>)</label
-                  >
-                </div>
-                <div class="form-check form-switch">
-                  <input
-                    id="enableControl"
-                    class="form-check-input"
-                    type="checkbox"
-                    role="switch"
-                    formControlName="enableControl"
-                  />
-                  <label for="enableControl" class="form-check-label"
-                    >Vezérlés szöveges paranccsal (<code>command/…</code>)</label
-                  >
-                </div>
-              </div>
-
-              <div class="col-12">
-                <span class="form-label d-block">Shelly Add-on</span>
-                <div class="d-flex flex-wrap align-items-center gap-3">
-                  <div class="form-check form-switch mb-0">
+              @if (isTasmota()) {
+                <ng-container formGroupName="tasmota">
+                  <div class="col-sm-6">
+                    <label for="topic" class="form-label">Topic</label>
                     <input
-                      id="addonEnabled"
-                      class="form-check-input"
-                      type="checkbox"
-                      role="switch"
-                      formControlName="addonEnabled"
+                      id="topic"
+                      type="text"
+                      class="form-control font-monospace"
+                      formControlName="topic"
+                      [placeholder]="preview().identity"
+                      [class.is-invalid]="invalid('tasmota.topic')"
                     />
-                    <label for="addonEnabled" class="form-check-label">DS18B20 hőmérők</label>
+                    <div class="form-text">Üresen a MAC végéből képzett alapérték.</div>
+                    <div class="invalid-feedback">Perjel, szóköz, # és + nélkül.</div>
                   </div>
-                  @if (form.controls.addonEnabled.value) {
-                    <div class="d-flex align-items-center gap-2">
-                      <label for="sensorCount" class="form-label mb-0 small">Darab</label>
-                      <select
-                        id="sensorCount"
-                        class="form-select form-select-sm"
-                        style="width: 5rem"
-                        formControlName="sensorCount"
-                      >
-                        @for (n of sensorCounts; track n) {
-                          <option [ngValue]="n">{{ n }}</option>
-                        }
-                      </select>
-                    </div>
-                  }
-                </div>
-                <div class="form-text">
-                  A hőmérők <code>temperature:100</code>-tól számozódnak. A meglévő hőmérők értéke
-                  és címe átméretezéskor megmarad.
-                </div>
-                @if (editing() && addonChanged()) {
-                  <div class="alert alert-info small py-2 mt-2 mb-0" role="status">
-                    Mentéskor az eszköz újraindul (ki- és bejelentkezik), mint a valódi a perifériák
-                    átállítása után.
-                  </div>
-                }
-              </div>
 
-              <div class="col-12">
-                @if (!editing()) {
+                  <div class="col-sm-4">
+                    <label for="relayCount" class="form-label">Relék</label>
+                    <select id="relayCount" class="form-select" formControlName="relayCount">
+                      @for (n of relayCounts; track n) {
+                        <option [ngValue]="n">{{ n }}</option>
+                      }
+                    </select>
+                  </div>
+                  <div class="col-sm-4">
+                    <label for="tasmotaSensors" class="form-label">DS18B20 hőmérők</label>
+                    <select id="tasmotaSensors" class="form-select" formControlName="sensorCount">
+                      @for (n of tasmotaSensorCounts; track n) {
+                        <option [ngValue]="n">{{ n === 0 ? 'nincs' : n }}</option>
+                      }
+                    </select>
+                  </div>
+                  <div class="col-sm-4">
+                    <label for="telePeriod" class="form-label">TelePeriod</label>
+                    <div class="input-group has-validation">
+                      <input
+                        id="telePeriod"
+                        type="number"
+                        class="form-control"
+                        formControlName="telePeriod"
+                        [min]="teleMin"
+                        [max]="teleMax"
+                        [class.is-invalid]="invalid('tasmota.telePeriod')"
+                      />
+                      <span class="input-group-text">mp</span>
+                      <div class="invalid-feedback">{{ teleMin }} és {{ teleMax }} között.</div>
+                    </div>
+                  </div>
+
+                  <div class="col-12">
+                    <div class="form-check form-switch">
+                      <input
+                        id="hasEnergy"
+                        class="form-check-input"
+                        type="checkbox"
+                        role="switch"
+                        formControlName="hasEnergy"
+                      />
+                      <label for="hasEnergy" class="form-check-label"
+                        >Fogyasztásmérő (<code>ENERGY</code>, az összes relét méri)</label
+                      >
+                    </div>
+                    <div class="form-check form-switch">
+                      <input
+                        id="publishOnChange"
+                        class="form-check-input"
+                        type="checkbox"
+                        role="switch"
+                        formControlName="publishOnChange"
+                      />
+                      <label for="publishOnChange" class="form-check-label"
+                        >Változáskor azonnali <code>SENSOR</code> jelentés</label
+                      >
+                    </div>
+                    <div class="form-check form-switch">
+                      <input
+                        id="powerRetain"
+                        class="form-check-input"
+                        type="checkbox"
+                        role="switch"
+                        formControlName="powerRetain"
+                      />
+                      <label for="powerRetain" class="form-check-label"
+                        >Megőrzött <code>stat/…/POWER</code> (PowerRetain)</label
+                      >
+                    </div>
+                  </div>
+
+                  <div class="col-12">
+                    <details>
+                      <summary class="small">Speciális topicbeállítások</summary>
+                      <div class="row g-3 mt-1">
+                        <div class="col-sm-7">
+                          <label for="fullTopic" class="form-label">FullTopic</label>
+                          <input
+                            id="fullTopic"
+                            type="text"
+                            class="form-control font-monospace"
+                            formControlName="fullTopic"
+                            [class.is-invalid]="invalid('tasmota.fullTopic')"
+                          />
+                          <div class="invalid-feedback">
+                            Kell bele a %prefix% és a %topic% jelölő.
+                          </div>
+                        </div>
+                        <div class="col-sm-5">
+                          <label for="groupTopic" class="form-label">GroupTopic</label>
+                          <input
+                            id="groupTopic"
+                            type="text"
+                            class="form-control font-monospace"
+                            formControlName="groupTopic"
+                            [class.is-invalid]="invalid('tasmota.groupTopic')"
+                          />
+                          <div class="invalid-feedback">
+                            Kötelező; perjel, szóköz, # és + nélkül.
+                          </div>
+                        </div>
+                      </div>
+                    </details>
+                  </div>
+                </ng-container>
+              } @else {
+                <ng-container formGroupName="shelly">
+                  <div class="col-sm-6">
+                    <label for="topicPrefix" class="form-label">Topic-előtag</label>
+                    <input
+                      id="topicPrefix"
+                      type="text"
+                      class="form-control font-monospace"
+                      formControlName="topicPrefix"
+                      [placeholder]="preview().identity"
+                      [class.is-invalid]="invalid('shelly.topicPrefix')"
+                    />
+                    <div class="form-text">Üresen az eszközazonosító.</div>
+                    <div class="invalid-feedback">
+                      Nem lehet benne szóköz, # vagy +, és perjel a két végén.
+                    </div>
+                  </div>
+
+                  <div class="col-12">
+                    <span class="form-label d-block">MQTT</span>
+                    <div class="form-check form-switch">
+                      <input
+                        id="rpcNtf"
+                        class="form-check-input"
+                        type="checkbox"
+                        role="switch"
+                        formControlName="rpcNtf"
+                      />
+                      <label for="rpcNtf" class="form-check-label"
+                        >RPC-értesítések (<code>events/rpc</code>)</label
+                      >
+                    </div>
+                    <div class="form-check form-switch">
+                      <input
+                        id="statusNtf"
+                        class="form-check-input"
+                        type="checkbox"
+                        role="switch"
+                        formControlName="statusNtf"
+                      />
+                      <label for="statusNtf" class="form-check-label"
+                        >Állapotüzenetek (<code>status/…</code>)</label
+                      >
+                    </div>
+                    <div class="form-check form-switch">
+                      <input
+                        id="enableControl"
+                        class="form-check-input"
+                        type="checkbox"
+                        role="switch"
+                        formControlName="enableControl"
+                      />
+                      <label for="enableControl" class="form-check-label"
+                        >Vezérlés szöveges paranccsal (<code>command/…</code>)</label
+                      >
+                    </div>
+                  </div>
+
+                  <div class="col-12">
+                    <span class="form-label d-block">Shelly Add-on</span>
+                    <div class="d-flex flex-wrap align-items-center gap-3">
+                      <div class="form-check form-switch mb-0">
+                        <input
+                          id="addonEnabled"
+                          class="form-check-input"
+                          type="checkbox"
+                          role="switch"
+                          formControlName="addonEnabled"
+                        />
+                        <label for="addonEnabled" class="form-check-label">DS18B20 hőmérők</label>
+                      </div>
+                      @if (form.controls.shelly.controls.addonEnabled.value) {
+                        <div class="d-flex align-items-center gap-2">
+                          <label for="sensorCount" class="form-label mb-0 small">Darab</label>
+                          <select
+                            id="sensorCount"
+                            class="form-select form-select-sm"
+                            style="width: 5rem"
+                            formControlName="sensorCount"
+                          >
+                            @for (n of addonCounts; track n) {
+                              <option [ngValue]="n">{{ n }}</option>
+                            }
+                          </select>
+                        </div>
+                      }
+                    </div>
+                    <div class="form-text">
+                      A hőmérők <code>temperature:100</code>-tól számozódnak.
+                    </div>
+                  </div>
+                </ng-container>
+              }
+
+              @if (!editing()) {
+                <div class="col-12">
                   <div class="form-check form-switch">
                     <input
                       id="enabled"
@@ -191,10 +313,16 @@
                       >Felvétel után azonnal induljon</label
                     >
                   </div>
-                }
-              </div>
+                </div>
+              }
             </div>
 
+            @if (editing() && restarts()) {
+              <div class="alert alert-info small py-2 mt-3 mb-0" role="status">
+                Mentéskor az eszköz újraindul (ki- és bejelentkezik), mint a valódi a perifériák
+                átállítása után. A meglévő relék, mérők és hőmérők értéke megmarad.
+              </div>
+            }
             @if (error(); as message) {
               <div class="alert alert-danger mt-3 mb-0" role="alert">{{ message }}</div>
             }
@@ -219,7 +347,7 @@
         <div class="card-header">Létrejövő topicok</div>
         <div class="card-body">
           <p class="small mb-2">
-            Eszközazonosító: <code>{{ preview().deviceId }}</code>
+            {{ isTasmota() ? 'Topic' : 'Eszközazonosító' }}: <code>{{ preview().identity }}</code>
           </p>
           <ul class="list-unstyled small mb-0">
             @for (row of preview().topics; track row.topic) {

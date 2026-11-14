@@ -4,7 +4,7 @@ import type { DeviceType, DeviceView } from '@iot-sim/shared';
 import { Api, errorMessage } from '../core/api';
 import { DeviceStore } from '../core/device-store';
 import { identity, switchLabel, typeLabel } from './device-labels';
-import { formatNumber, meterValues } from './meter-values';
+import { formatNumber, meterActive, meterValues } from './meter-values';
 
 @Component({
   selector: 'app-device-list',
@@ -34,8 +34,9 @@ export class DeviceList {
   protected readonly identity = identity;
   protected readonly switchLabel = switchLabel;
 
-  protected power(state: DeviceView['switches'][number]): string {
-    return `${formatNumber(meterValues(state, Date.now()).power, 1)} W`;
+  protected power(device: DeviceView, state: DeviceView['switches'][number]): string {
+    const power = meterValues(state, Date.now(), meterActive(device, state)).power;
+    return `${formatNumber(power, 1)} W`;
   }
 
   protected isBusy(device: DeviceView, index: number): boolean {

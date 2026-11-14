@@ -1,5 +1,12 @@
 import type { Device } from '@iot-sim/shared';
-import { shellyTopics, typeLabel } from './device-labels';
+import {
+  deviceTopics,
+  sensorKey,
+  shellyTopics,
+  switchKey,
+  switchLabel,
+  typeLabel,
+} from './device-labels';
 
 const base: Device = {
   id: 'd1',
@@ -49,5 +56,47 @@ describe('device-labels', () => {
     const topics = shellyTopics(device).map((t) => t.topic);
     expect(topics).toContain('otthon/nappali/status/temperature:100');
     expect(topics).toContain('otthon/nappali/status/temperature:101');
+  });
+
+  it('a Tasmota topicjai a FullTopic és a relék szerint készülnek', () => {
+    const device: Device = {
+      id: 't1',
+      name: 'Mosógép',
+      type: 'tasmota',
+      enabled: true,
+      tasmota: {
+        mac: 'A8032ABE54DC',
+        topic: 'mosogep',
+        fullTopic: '%prefix%/%topic%/',
+        groupTopic: 'tasmotas',
+        relayCount: 2,
+        hasEnergy: true,
+        sensorCount: 1,
+        discovery: false,
+        telePeriod: 300,
+        publishOnChange: true,
+        powerRetain: false,
+      },
+      switches: [
+        { index: 0, output: false, source: 'init' },
+        { index: 1, output: false, source: 'init' },
+      ],
+      sensors: [{ index: 0, address: '28FF64061FC795B1', tC: 21.5, error: null }],
+    };
+    const topics = deviceTopics(device).map((t) => t.topic);
+    expect(topics).toEqual(
+      expect.arrayContaining([
+        'tele/mosogep/LWT',
+        'cmnd/mosogep/POWER1',
+        'cmnd/mosogep/POWER2',
+        'stat/mosogep/RESULT',
+        'cmnd/tasmotas/#',
+        'tele/mosogep/SENSOR',
+      ]),
+    );
+    expect(typeLabel(device)).toBe('Tasmota');
+    expect(switchLabel(device, 1)).toBe('Relé 2');
+    expect(switchKey(device, 1)).toBe('POWER2');
+    expect(sensorKey(device, 0)).toBe('DS18B20');
   });
 });

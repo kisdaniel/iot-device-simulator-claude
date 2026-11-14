@@ -81,20 +81,24 @@
               />
               <label class="form-check-label fw-semibold" [for]="'sw-' + sw.index"
                 >{{ switchLabel(d, sw.index) }}
-                <code class="small fw-normal">switch:{{ sw.index }}</code></label
+                <code class="small fw-normal">{{ switchKey(d, sw.index) }}</code></label
               >
             </div>
             <span class="small text-secondary">forrás: {{ sw.source }}</span>
           </div>
-          <div class="card-body">
-            <app-meter-editor [device]="d" [state]="sw" [now]="now()" />
-          </div>
+          @if (sw.meter) {
+            <div class="card-body">
+              <app-meter-editor [device]="d" [state]="sw" [now]="now()" />
+            </div>
+          }
         </div>
       }
 
       @if (d.sensors.length > 0) {
         <div class="card mb-4">
-          <div class="card-header">Add-on hőmérők</div>
+          <div class="card-header">
+            {{ d.type === 'tasmota' ? 'DS18B20 hőmérők' : 'Add-on hőmérők' }}
+          </div>
           <ul class="list-group list-group-flush">
             @for (sensor of d.sensors; track sensor.index) {
               <li class="list-group-item">

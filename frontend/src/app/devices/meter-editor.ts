@@ -2,7 +2,7 @@ import { Component, computed, inject, input, signal } from '@angular/core';
 import type { DeviceView, SwitchState } from '@iot-sim/shared';
 import { Api, MeterInput, errorMessage } from '../core/api';
 import { DeviceStore } from '../core/device-store';
-import { formatEnergy, formatNumber, meterValues } from './meter-values';
+import { formatEnergy, formatNumber, meterActive, meterValues } from './meter-values';
 
 type NumberField = 'loadPower' | 'voltage' | 'powerFactor' | 'frequency' | 'energyTotalWh';
 
@@ -38,7 +38,13 @@ export class MeterEditor {
   /** A pillanat (ms), amelyre a számlálót léptetjük; a szülő másodpercenként frissíti. */
   readonly now = input.required<number>();
 
-  protected readonly values = computed(() => meterValues(this.state(), this.now()));
+  protected readonly values = computed(() =>
+    meterValues(this.state(), this.now(), meterActive(this.device(), this.state())),
+  );
+  /** A Tasmota egyetlen mérője az összes relét méri. */
+  protected readonly wholeDevice = computed(
+    () => this.device().type === 'tasmota' && this.device().switches.length > 1,
+  );
   protected readonly invalid = signal<Partial<Record<string, string>>>({});
   protected readonly error = signal<string | null>(null);
   protected readonly busy = signal(false);

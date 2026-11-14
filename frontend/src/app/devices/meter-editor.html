@@ -1,4 +1,11 @@
 @if (state().meter; as meter) {
+  @if (wholeDevice()) {
+    <p class="small text-secondary mb-2">
+      <i class="bi bi-info-circle" aria-hidden="true"></i>
+      Az eszköz egyetlen mérője (<code>ENERGY</code>) az összes relét méri: bármelyik bekapcsolt
+      relénél a terhelés jelenik meg.
+    </p>
+  }
   <div class="row g-2 text-center mb-3">
     <div class="col-4">
       <div class="small text-secondary">Teljesítmény</div>
