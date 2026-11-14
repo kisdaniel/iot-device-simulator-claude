@@ -102,6 +102,15 @@ export interface ShellyConfig {
   addon: { enabled: boolean; sensorCount: number };
 }
 
+/** Az Add-on első hőmérőjének komponensazonosítója (temperature:100). */
+export const SHELLY_ADDON_FIRST_ID = 100;
+/** Az Add-onra köthető DS18B20 hőmérők legnagyobb száma. */
+export const SHELLY_ADDON_MAX_SENSORS = 5;
+
+/** A hőmérő megengedett tartománya (°C), a DS18B20 adatlapja szerint. */
+export const TEMPERATURE_MIN_C = -55;
+export const TEMPERATURE_MAX_C = 125;
+
 /** A ténylegesen használt topic-előtag: a megadott előtag, vagy ha nincs, az eszközazonosító. */
 export function shellyTopicPrefix(
   config: Pick<ShellyConfig, 'topicPrefix' | 'deviceId'>,
@@ -183,6 +192,7 @@ export interface CreateDeviceRequest {
     rpcNtf?: boolean;
     statusNtf?: boolean;
     enableControl?: boolean;
+    addon?: { enabled: boolean; sensorCount: number };
   };
 }
 
@@ -195,7 +205,17 @@ export interface UpdateDeviceRequest {
     rpcNtf?: boolean;
     statusNtf?: boolean;
     enableControl?: boolean;
+    /** Változásakor az eszköz újraindul, mint a valódi a perifériák átállítása után */
+    addon?: { enabled: boolean; sensorCount: number };
   };
+}
+
+/** PUT /api/devices/:id/sensors/:index törzse. */
+export interface SetSensorRequest {
+  /** °C; null csak hibával együtt */
+  tC?: number | null;
+  /** Szenzorhiba szimulációja; null: nincs hiba */
+  error?: TemperatureError | null;
 }
 
 /** A brokerbeállítás, ahogy az adatbázisban és a környezetben él (jelszóval). */
