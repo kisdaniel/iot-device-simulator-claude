@@ -10,6 +10,11 @@ import {
 import type { DeviceProfile, ProfileContext } from '../../device-profile.js';
 import { energyAt, meterActive } from '../../meter.js';
 import {
+  discoveryConfig,
+  discoverySensors,
+  discoveryTopics,
+} from './tasmota-discovery.js';
+import {
   hasSensorData,
   onOff,
   sensorPayload,
@@ -48,6 +53,7 @@ export class TasmotaProfile implements DeviceProfile {
     const config = tasmotaConfig(ctx.device);
     const now = new Date();
     ctx.publish(teleTopic(config, 'LWT'), 'Online', { retain: true });
+    if (config.discovery) this.publishDiscovery(ctx);
     for (const state of ctx.device.switches) this.publishPower(ctx, state);
     ctx.publish(
       teleTopic(config, 'STATE'),
@@ -57,6 +63,54 @@ export class TasmotaProfile implements DeviceProfile {
     if (hasSensorData(ctx.device)) {
       ctx.publish(teleTopic(config, 'SENSOR'), this.sensor(ctx, now, tele));
     }
+  }
+
+  /**
+   * Bekapcsolt discoverynél a megőrzött felfedezési üzenetek. A Tasmota a
+   * csatlakozás után küldi ki őket; lekapcsoláskor megmaradnak.
+   */
+  private publishDiscovery(ctx: ProfileContext): void {
+    const topics = discoveryTopics(ctx.device);
+    const now = new Date();
+    ctx.publish(topics.config, discoveryConfig(ctx.device), { retain: true });
+    ctx.publish(
+      topics.sensors,
+      discoverySensors(this.sensor(ctx, now, this.teleState(ctx, now))),
+      {
+        retain: true,
+      },
+    );
+  }
+
+  /** Üres, megőrzött üzenet: a vezérlő eltávolítja az eszközt. */
+  private clearDiscovery(ctx: ProfileContext, device: Device): void {
+    const topics = discoveryTopics(device);
+    ctx.publish(topics.config, '', { retain: true });
+    ctx.publish(topics.sensors, '', { retain: true });
+  }
+
+  onRemove(ctx: ProfileContext): void {
+    if (tasmotaConfig(ctx.device).discovery)
+      this.clearDiscovery(ctx, ctx.device);
+  }
+
+  /**
+   * A discovery ki- és bekapcsolása, valamint a név változása lekapcsolt
+   * eszközön is frissíti a megőrzött üzenetet; újraindításkor az onStart már elküldte.
+   */
+  onReconfigured(
+    ctx: ProfileContext,
+    before: Device,
+    restarted: boolean,
+  ): void {
+    const now = tasmotaConfig(ctx.device);
+    const was = tasmotaConfig(before);
+    if (!now.discovery) {
+      if (was.discovery) this.clearDiscovery(ctx, before);
+      return;
+    }
+    const started = restarted && ctx.device.enabled;
+    if (!started) this.publishDiscovery(ctx);
   }
 
   onStop(ctx: ProfileContext): void {
