@@ -1,0 +1,163 @@
+<div class="card" style="max-width: 40rem">
+  <div class="card-header">Konfiguráció exportálása és importálása</div>
+  <div class="card-body">
+    <h2 class="h6">Exportálás</h2>
+    <p class="small text-secondary">
+      Az összes eszköz beállítása JSON fájlban. A fájl változtatás nélkül visszatölthető, vagy
+      induláskor <code>CONFIG_FILE</code>-ként csatolható. A broker jelszava nem kerül bele.
+    </p>
+    <div class="d-flex flex-wrap align-items-center gap-3 mb-4">
+      <div class="form-check form-switch mb-0">
+        <input
+          id="includeState"
+          class="form-check-input"
+          type="checkbox"
+          role="switch"
+          [checked]="includeState()"
+          (change)="setIncludeState($event)"
+        />
+        <label for="includeState" class="form-check-label"
+          >Pillanatnyi állapottal (kapcsolók, mért értékek, hőmérsékletek)</label
+        >
+      </div>
+      <a class="btn btn-outline-primary" [href]="exportUrl()" download>
+        <i class="bi bi-download" aria-hidden="true"></i> Exportálás
+      </a>
+    </div>
+
+    <h2 class="h6">Importálás</h2>
+    <p class="small text-secondary">
+      A fájl kiválasztása után előnézet mutatja, mi változna; írás csak az Importálás gombra
+      történik. Az eszközöket a Shelly eszközazonosító, ill. a Tasmota topic azonosítja.
+    </p>
+    <div class="mb-3">
+      <label for="configFile" class="form-label">JSON fájl</label>
+      <input
+        id="configFile"
+        class="form-control"
+        type="file"
+        accept=".json,application/json"
+        (change)="choose($event)"
+      />
+    </div>
+    <fieldset class="mb-3">
+      <legend class="form-label fs-6 mb-1">Mód</legend>
+      <div class="form-check">
+        <input
+          id="modeMerge"
+          class="form-check-input"
+          type="radio"
+          name="importMode"
+          [checked]="mode() === 'merge'"
+          (change)="setMode('merge')"
+        />
+        <label for="modeMerge" class="form-check-label"
+          >Összefésülés: a fájlban szereplő eszközök létrejönnek vagy frissülnek, a többi
+          marad</label
+        >
+      </div>
+      <div class="form-check">
+        <input
+          id="modeReplace"
+          class="form-check-input"
+          type="radio"
+          name="importMode"
+          [checked]="mode() === 'replace'"
+          (change)="setMode('replace')"
+        />
+        <label for="modeReplace" class="form-check-label"
+          >Csere: az eszközlista pontosan a fájl tartalma lesz, a többi eszköz törlődik</label
+        >
+      </div>
+    </fieldset>
+
+    @if (failure(); as message) {
+      <div class="alert alert-danger" role="alert" data-testid="import-errors">
+        <div>{{ message }}</div>
+        @if (errors().length > 0) {
+          <ul class="mb-0 mt-2 ps-3 small">
+            @for (error of errors(); track $index) {
+              <li>
+                @if (error.path) {
+                  <code>{{ error.path }}</code>
+                }
+                @if (error.device) {
+                  („{{ error.device }}”)
+                }
+                {{ error.message }}
+              </li>
+            }
+          </ul>
+        }
+      </div>
+    }
+
+    @if (preview(); as p) {
+      <div class="border rounded p-3 mb-3" data-testid="import-preview">
+        <div class="fw-semibold mb-2">Előnézet: {{ fileName() }}</div>
+        <ul class="list-unstyled small mb-2">
+          @for (
+            group of [
+              { label: 'Létrejön', items: p.created, cls: 'text-success' },
+              { label: 'Frissül', items: p.updated, cls: 'text-primary' },
+              { label: 'Törlődik', items: p.removed, cls: 'text-danger' },
+              { label: 'Változatlan', items: p.unchanged, cls: 'text-secondary' },
+            ];
+            track group.label
+          ) {
+            @if (group.items.length > 0) {
+              <li class="mb-1">
+                <span [class]="group.cls + ' fw-semibold'"
+                  >{{ group.label }} ({{ group.items.length }}):</span
+                >
+                @for (item of group.items; track item.identity; let last = $last) {
+                  {{ item.name }}
+                  <span class="text-secondary"
+                    >({{ typeNames[item.type] }}, <code>{{ item.identity }}</code>)</span
+                  >{{ last ? '' : ',' }}
+                }
+              </li>
+            }
+          }
+        </ul>
+        @switch (p.broker) {
+          @case ('updated') {
+            <div class="small mb-2">
+              A broker címe is frissül a fájlból; a tárolt jelszó megmarad.
+            </div>
+          }
+          @case ('ignored') {
+            <div class="small text-secondary mb-2">
+              A fájl broker beállítása kimarad, mert a broker környezeti változóból
+              (<code>MQTT_URL</code>) jön.
+            </div>
+          }
+        }
+        @if (hasChanges()) {
+          <button
+            type="button"
+            class="btn"
+            [class.btn-danger]="p.removed.length > 0"
+            [class.btn-primary]="p.removed.length === 0"
+            [disabled]="busy()"
+            (click)="apply()"
+          >
+            Importálás
+            @if (p.removed.length > 0) {
+              ({{ p.removed.length }} eszköz törlődik)
+            }
+          </button>
+        } @else {
+          <div class="small text-secondary">Nincs mit importálni: minden egyezik.</div>
+        }
+      </div>
+    }
+
+    @if (result(); as r) {
+      <div class="alert alert-success mb-0" role="status" data-testid="import-result">
+        Importálva: {{ r.created.length }} új, {{ r.updated.length }} frissített,
+        {{ r.removed.length }} törölt eszköz.
+      </div>
+    }
+  </div>
+</div>

@@ -3,10 +3,11 @@ import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import type { BrokerSettingsView, BrokerTestResult } from '@iot-sim/shared';
 import { Api, BrokerSettingsInput, errorMessage } from '../core/api';
 import { BrokerStatus } from '../core/broker-status';
+import { ConfigTransfer } from './config-transfer';
 
 @Component({
   selector: 'app-broker-settings',
-  imports: [ReactiveFormsModule],
+  imports: [ReactiveFormsModule, ConfigTransfer],
   templateUrl: './broker-settings.html',
 })
 export class BrokerSettings implements OnInit {
