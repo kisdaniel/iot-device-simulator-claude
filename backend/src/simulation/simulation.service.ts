@@ -126,9 +126,10 @@ export class SimulationService
   reconfigure(device: Device): DeviceView {
     const current = this.devices.get(device.id);
     const profile = current?.profile;
-    if (
-      !current ||
-      !profile ||
+    if (!current || !profile) return this.load(device);
+
+    const before = structuredClone(current.device);
+    const restart =
       current.device.enabled !== device.enabled ||
       // A perifériák (Add-on) átállítása után a valós eszköz is újraindul.
       JSON.stringify(current.device.sensors) !==
@@ -136,15 +137,19 @@ export class SimulationService
       // A relék számának vagy a mérő meglétének változása is újraindítást igényel.
       switchLayout(current.device) !== switchLayout(device) ||
       JSON.stringify(profile.subscriptions(current.device)) !==
-        JSON.stringify(profile.subscriptions(device))
-    ) {
-      return this.load(device);
+        JSON.stringify(profile.subscriptions(device));
+
+    if (restart) {
+      const view = this.load(device);
+      this.devices.get(device.id)?.reconfigured(before, true);
+      return view;
     }
     Object.assign(current.device, {
       name: device.name,
       shelly: device.shelly,
       tasmota: device.tasmota,
     });
+    current.reconfigured(before, false);
     return this.view(current);
   }
 
@@ -152,7 +157,7 @@ export class SimulationService
   unload(id: string): boolean {
     const existing = this.devices.get(id);
     if (!existing) return false;
-    existing.stop();
+    existing.remove();
     this.devices.delete(id);
     return true;
   }
