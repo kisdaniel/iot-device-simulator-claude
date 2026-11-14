@@ -110,14 +110,23 @@ A követelmények azonosítója a technikai specifikációban és a tesztekben h
 | F-64 | JSON fájl a felületről is importálható; a felület az írás előtt megmutatja, hány eszköz jön létre, frissül és törlődik. | K |
 | F-65 | Hibás fájl esetén semmi nem változik, és a hibaüzenet megnevezi a hibás eszközt és mezőt. | K |
 
+### Home Assistant konfiguráció
+
+| Az. | Követelmény | Prio |
+| --- | --- | --- |
+| F-70 | A felület a felvett eszközökből Home Assistant MQTT-konfigurációt generál (`configuration.yaml`-ba másolható `mqtt:` blokk): kapcsolónként egy `switch`, mért értékenként és hőmérőnként egy `sensor` entitás, eszközönként csoportosítva, elérhetőséggel. | K |
+| F-71 | A konfigurációba kerülő eszközök kiválaszthatók; az eredmény előnézetben látszik, vágólapra másolható és fájlként letölthető. | K |
+| F-72 | A discoveryvel felvett Tasmota eszközök alapból kimaradnak, mert a Home Assistant már felismeri őket; kérésre bekerülnek. A generátor figyelmeztet, ha egy eszköz beállítása miatt az entitás nem kap állapotot (például kikapcsolt Shelly-értesítések). | K |
+
 ## Felhasználói felület
 
-A felület egyoldalas Angular alkalmazás Bootstrap stílussal, három képernyővel. A nyelve magyar.
+A felület egyoldalas Angular alkalmazás Bootstrap stílussal, négy képernyővel. A nyelve magyar.
 
 | Képernyő | Tartalom | Műveletek |
 | --- | --- | --- |
 | Eszközlista (kezdőlap) | Eszközönként egy kártya: név, típus, azonosító, kapcsolati állapot, kapcsolók, aktuális teljesítmény, hőmérsékletek. Fejlécben a broker állapota. | Kapcsoló átbillentése közvetlenül a kártyán; új eszköz; szűrés típusra és névre. |
 | Eszköz részletei | Kapcsolónként egy blokk: állapot, terhelés (W), feszültség (V), áramerősség (A), energiaszámláló. Hőmérőnként egy beviteli mező és csúszka. Az eszköz MQTT topicjai. Üzenetnapló. | Kapcsolás; mért értékek megadása; számláló nullázása; lekapcsolás és visszakapcsolás; szerkesztés; másolás; törlés (megerősítéssel). |
+| Home Assistant | A felvett eszközök listája jelölőnégyzetekkel, a generált YAML előnézete, darabszámok és figyelmeztetések. | Eszközök kiválasztása; discoveryvel felvett Tasmota eszközök bevonása; másolás; letöltés. |
 | Beállítások | Broker kapcsolati adatai, kapcsolati állapot és az utolsó hibaüzenet. | Mentés; kapcsolat tesztelése; konfiguráció exportálása és importálása JSON fájlból, előnézettel. |
 
 Az új eszköz űrlapja a típus kiválasztása után csak az adott típusra érvényes mezőket mutatja, és előnézetben kiírja a létrejövő topicokat. A mért értékek beírása Enterre vagy a mező elhagyásakor lép érvénybe; érvénytelen értéknél a mező hibát jelez, és nem megy ki üzenet.
