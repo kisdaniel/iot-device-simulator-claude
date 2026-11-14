@@ -20,7 +20,7 @@ describe('App', () => {
     const links = Array.from(compiled.querySelectorAll('.nav-link')).map((a) =>
       a.textContent?.trim(),
     );
-    expect(links).toEqual(['Eszközök', 'Beállítások']);
+    expect(links).toEqual(['Eszközök', 'Home Assistant', 'Beállítások']);
   });
 
   it('a fejlécben mutatja a brokerkapcsolat állapotát', async () => {

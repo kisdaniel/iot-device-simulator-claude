@@ -1,0 +1,131 @@
+<div class="d-flex flex-wrap align-items-center gap-2 mb-1">
+  <h1 class="h3 mb-0 me-auto">Home Assistant konfiguráció</h1>
+</div>
+<p class="text-secondary mb-4">
+  MQTT-konfiguráció a <code>configuration.yaml</code>-ba: a kiválasztott eszközök kapcsolói és mért
+  értékei entitásként jelennek meg a Home Assistantben. A szimulátor brokeréhez kapcsolódó
+  MQTT-integráció kell hozzá.
+</p>
+
+@if (!store.loaded()) {
+  <div class="text-secondary" role="status">Betöltés…</div>
+} @else if (store.count() === 0) {
+  <div class="card">
+    <div class="card-body text-center py-5">
+      <p class="h5">Még nincs szimulált eszköz</p>
+      <p class="text-secondary">
+        Vegyél fel eszközöket, és itt elkészül hozzájuk a Home Assistant konfiguráció.
+      </p>
+      <a class="btn btn-primary" routerLink="/devices/new">Új eszköz</a>
+    </div>
+  </div>
+} @else {
+  <div class="row g-4">
+    <div class="col-lg-4">
+      <div class="card">
+        <div class="card-header d-flex align-items-center">
+          <span class="me-auto">Eszközök</span>
+          <button type="button" class="btn btn-link btn-sm p-0 me-2" (click)="selectAll(true)">
+            mind
+          </button>
+          <button type="button" class="btn btn-link btn-sm p-0" (click)="selectAll(false)">
+            egyik sem
+          </button>
+        </div>
+        <ul class="list-group list-group-flush">
+          @for (device of store.devices(); track device.id) {
+            <li class="list-group-item">
+              <div class="form-check mb-0">
+                <input
+                  class="form-check-input"
+                  type="checkbox"
+                  [id]="'ha-' + device.id"
+                  [checked]="isSelected(device)"
+                  (change)="toggle(device)"
+                />
+                <label class="form-check-label" [for]="'ha-' + device.id">
+                  {{ device.name }}
+                  <span class="d-block small text-secondary"
+                    >{{ typeLabel(device) }} · <code>{{ identity(device) }}</code></span
+                  >
+                  @if (device.tasmota?.discovery) {
+                    <span class="badge text-bg-info mt-1">discovery</span>
+                  }
+                </label>
+              </div>
+            </li>
+          }
+        </ul>
+        <div class="card-footer">
+          <div class="form-check form-switch mb-0 small">
+            <input
+              id="includeDiscovered"
+              class="form-check-input"
+              type="checkbox"
+              role="switch"
+              [checked]="includeDiscovered()"
+              (change)="setIncludeDiscovered($event)"
+            />
+            <label for="includeDiscovered" class="form-check-label">
+              A discoveryvel felvett Tasmota eszközök is (a Home Assistantben duplán jelennének meg)
+            </label>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-lg-8">
+      @if (error(); as message) {
+        <div class="alert alert-danger" role="alert">{{ message }}</div>
+      }
+      @if (result(); as r) {
+        @if (r.warnings.length > 0) {
+          <div class="alert alert-warning small" role="status">
+            <ul class="mb-0 ps-3">
+              @for (warning of r.warnings; track $index) {
+                <li>{{ warning }}</li>
+              }
+            </ul>
+          </div>
+        }
+        <div class="card">
+          <div class="card-header d-flex flex-wrap align-items-center gap-2">
+            <span class="me-auto">{{ r.deviceCount }} eszköz, {{ r.entityCount }} entitás</span>
+            <button
+              type="button"
+              class="btn btn-sm btn-outline-secondary"
+              [disabled]="r.entityCount === 0"
+              (click)="copy()"
+            >
+              <i
+                class="bi"
+                [class.bi-clipboard]="!copied()"
+                [class.bi-clipboard-check]="copied()"
+                aria-hidden="true"
+              ></i>
+              {{ copied() ? 'Másolva' : 'Másolás' }}
+            </button>
+            <a
+              class="btn btn-sm btn-primary"
+              [href]="downloadUrl()"
+              [class.disabled]="r.entityCount === 0"
+              download
+            >
+              <i class="bi bi-download" aria-hidden="true"></i> Letöltés
+            </a>
+          </div>
+          @if (r.deviceCount === 0) {
+            <p class="card-body text-secondary mb-0">Válassz ki legalább egy eszközt.</p>
+          } @else {
+            <pre
+              class="mb-0 p-3 small bg-body-tertiary"
+              style="max-height: 40rem; overflow: auto"
+            ><code>{{ r.yaml }}</code></pre>
+          }
+        </div>
+      } @else {
+        <div class="text-secondary" role="status">Generálás…</div>
+      }
+    </div>
+  </div>
+}
