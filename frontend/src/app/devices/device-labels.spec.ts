@@ -72,7 +72,7 @@ describe('device-labels', () => {
         relayCount: 2,
         hasEnergy: true,
         sensorCount: 1,
-        discovery: false,
+        discovery: true,
         telePeriod: 300,
         publishOnChange: true,
         powerRetain: false,
@@ -92,6 +92,8 @@ describe('device-labels', () => {
         'stat/mosogep/RESULT',
         'cmnd/tasmotas/#',
         'tele/mosogep/SENSOR',
+        'tasmota/discovery/A8032ABE54DC/config',
+        'tasmota/discovery/A8032ABE54DC/sensors',
       ]),
     );
     expect(typeLabel(device)).toBe('Tasmota');
