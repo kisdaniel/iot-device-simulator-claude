@@ -2,7 +2,7 @@
 
 Shelly (1PM, 2PM, Add-on; Gen2, Gen3, Gen4) és Tasmota eszközök szimulációja MQTT-n keresztül, webes kezelőfelülettel. A szimulált eszközök ugyanazokat az üzeneteket küldik és fogadják, mint a valódiak, így a rájuk épülő rendszerek hardver nélkül tesztelhetők.
 
-> **Állapot:** felvehető Shelly 1PM és 2PM (Gen2, Gen3, Gen4) opcionális Add-onnal (1–5 DS18B20), valamint Tasmota eszköz 1–8 relével, fogyasztásmérővel, 0–8 DS18B20 hőmérővel és eszközönként bekapcsolható discoveryvel. A kapcsolók MQTT-ről és a felületről is állíthatók, a mért értékek a felületről adhatók meg. A felvett eszközökből a „Home Assistant” oldalon MQTT-konfiguráció generálható, és mellé egy `docker-compose.yml`, amely Home Assistantet és Mosquitto brokert indít, és betölti ezt a konfigurációt. A JSON konfiguráció importja és exportja a következő lépésben érkezik; a sorrendet a [technikai specifikáció](docs/technikai-specifikacio.md) „Megvalósítási lépések” szakasza írja le.
+> **Állapot:** felvehető Shelly 1PM és 2PM (Gen2, Gen3, Gen4) opcionális Add-onnal (1–5 DS18B20), valamint Tasmota eszköz 1–8 relével, fogyasztásmérővel, 0–8 DS18B20 hőmérővel és eszközönként bekapcsolható discoveryvel. A kapcsolók MQTT-ről és a felületről is állíthatók, a mért értékek a felületről adhatók meg. A felvett eszközökből a „Home Assistant” oldalon MQTT-konfiguráció generálható, és mellé egy `docker-compose.yml`, amely Home Assistantet és Mosquitto brokert indít, és betölti ezt a konfigurációt. A teljes konfiguráció JSON fájlba exportálható és onnan importálható, a felületről és induláskor (`CONFIG_FILE`) is. A további lépéseket a [technikai specifikáció](docs/technikai-specifikacio.md) „Megvalósítási lépések” szakasza írja le.
 
 ## Dokumentáció
 
@@ -48,17 +48,22 @@ npm run start:frontend      # Angular, http://localhost:4200 (az /api hívásoka
 | `MQTT_PASSWORD_FILE` | – | A jelszó fájlból (Docker secret) |
 | `MQTT_CA_FILE` | – | Saját CA-tanúsítvány `mqtts` kapcsolathoz |
 | `MQTT_REJECT_UNAUTHORIZED` | `true` | `false` esetén a tanúsítvány nincs ellenőrizve |
+| `MQTT_CLIENT_ID` | `iot-simulator-<véletlen>` | A közös MQTT-kapcsolat kliensazonosítója |
+| `CONFIG_FILE` | – | Indításkor importálandó JSON konfiguráció (pl. a felületről exportált fájl) |
+| `CONFIG_IMPORT_MODE` | `seed` | `seed`: csak üres adatbázisba tölt; `merge`: létrehoz és frissít; `replace`: az eszközlista pontosan a fájl tartalma lesz |
+| `MESSAGE_LOG_SIZE` | `200` | Eszközönként megőrzött MQTT-üzenetek száma |
 | `LOG_LEVEL` | `info` | `error`, `warn`, `info` vagy `debug` |
 
-A `MQTT_CLIENT_ID`, `CONFIG_FILE`, `CONFIG_IMPORT_MODE` és `MESSAGE_LOG_SIZE` változót az alkalmazás már beolvassa és ellenőrzi, de csak a későbbi lépésekben kap szerepet.
+**JSON konfiguráció.** A Beállítások oldalon a teljes konfiguráció JSON fájlba exportálható (választhatóan a pillanatnyi állapottal, a broker jelszava nélkül), és ugyanott importálható. Az import előbb előnézetet mutat (mi jön létre, mi frissül, mi törlődik), és csak megerősítés után ír; hibás fájlnál semmi nem változik. Ugyanez a fájl `CONFIG_FILE`-ként indításkor is betölthető; mintának a [config/devices.json](config/devices.json) szolgál, a `docker-compose.yml` kikommentelt sorai mutatják a csatolását. A formátumot a technikai specifikáció „JSON konfiguráció: import és export” szakasza írja le.
 
 ## Felépítés
 
 ```text
 shared/     közös TypeScript típusok
-backend/    NestJS: REST API, SQLite (TypeORM), később az MQTT-szimuláció
+backend/    NestJS: REST API, MQTT-szimuláció, SQLite (TypeORM)
 frontend/   Angular + Bootstrap kezelőfelület
 docker/     a Mosquitto broker konfigurációja
+config/     minta eszközlista a CONFIG_FILE-hoz
 docs/       specifikációk
 ```
 
