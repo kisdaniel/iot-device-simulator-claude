@@ -42,6 +42,11 @@ export interface ProfileContext {
    * Visszaadja a korábbi kimenetet. Nem létező kapcsolóra RangeError.
    */
   setSwitch(index: number, output: boolean, source: ChangeSource): boolean;
+  /**
+   * A profil MQTT-parancsra módosította az eszköz konfigurációját (pl. TelePeriod):
+   * a tulajdonos menti és értesíti a felületet.
+   */
+  saveConfig(): void;
   /** Nullázza a kapcsoló energiaszámlálóját; a nullázás előtti értéket adja (Wh). */
   resetEnergy(index: number): number;
   /**

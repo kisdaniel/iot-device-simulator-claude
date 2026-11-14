@@ -112,6 +112,7 @@ export class SimulationService
       bus: this.bus,
       logSize: this.config.messageLogSize,
       onStateChange: (d) => this.stateChanged(d),
+      onConfigChange: (d) => this.configChanged(d),
     });
     this.devices.set(device.id, simulated);
     if (device.enabled) simulated.start();
@@ -132,6 +133,8 @@ export class SimulationService
       // A perifériák (Add-on) átállítása után a valós eszköz is újraindul.
       JSON.stringify(current.device.sensors) !==
         JSON.stringify(device.sensors) ||
+      // A relék számának vagy a mérő meglétének változása is újraindítást igényel.
+      switchLayout(current.device) !== switchLayout(device) ||
       JSON.stringify(profile.subscriptions(current.device)) !==
         JSON.stringify(profile.subscriptions(device))
     ) {
@@ -227,6 +230,18 @@ export class SimulationService
     this.bus.emit({ type: 'device.updated', data: this.view(device) });
   }
 
+  private configChanged(device: SimulatedDevice): void {
+    const snapshot = structuredClone(device.device);
+    this.writes = this.writes
+      .then(() => this.store.update(snapshot))
+      .catch((err: Error) => {
+        this.logger.error(
+          `A konfiguráció mentése nem sikerült (${snapshot.id}): ${err.message}`,
+        );
+      });
+    this.bus.emit({ type: 'device.updated', data: this.view(device) });
+  }
+
   /** A kapcsolók állapotának mentése, sorba állítva. */
   private save(device: SimulatedDevice): void {
     const snapshot = structuredClone(device.device);
@@ -238,4 +253,11 @@ export class SimulationService
         );
       });
   }
+}
+
+/** A kapcsolók szerkezete (sorszám és mérő), az állapotuk nélkül. */
+function switchLayout(device: Device): string {
+  return JSON.stringify(
+    device.switches.map((s) => [s.index, s.meter !== undefined]),
+  );
 }
