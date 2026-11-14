@@ -13,7 +13,7 @@ import type {
   ProfileContext,
   SensorPatch,
 } from './device-profile.js';
-import { commitEnergy as commitMeterEnergy } from './meter.js';
+import { commitDeviceEnergy, meterActive } from './meter.js';
 
 export interface SimulatedDeviceOptions {
   gateway: MqttGateway;
@@ -21,6 +21,8 @@ export interface SimulatedDeviceOptions {
   logSize: number;
   /** Az eszköz állapota megváltozott (kapcsoló, mérő): a tulajdonos ment és értesít. */
   onStateChange: (device: SimulatedDevice) => void;
+  /** A profil módosította a konfigurációt: a tulajdonos ment és értesít. */
+  onConfigChange: (device: SimulatedDevice) => void;
 }
 
 /**
@@ -52,6 +54,7 @@ export class SimulatedDevice {
       setSwitch: (index, output, source) =>
         this.setSwitch(index, output, source),
       resetEnergy: (index) => this.resetEnergy(index),
+      saveConfig: () => this.options.onConfigChange(this),
       memory: this.memory,
     } as Omit<ProfileContext, 'startedAt'> as ProfileContext;
     // Élő érték: az eszköz minden indításkor újraindítja az üzemidőt.
@@ -125,7 +128,7 @@ export class SimulatedDevice {
    */
   setSwitch(index: number, output: boolean, source: ChangeSource): boolean {
     const state = this.switch(index);
-    commitMeterEnergy(state, new Date());
+    commitDeviceEnergy(this.device, new Date());
     const before = structuredClone(state);
     state.output = output;
     state.source = source;
@@ -138,7 +141,7 @@ export class SimulatedDevice {
     const state = this.switch(index);
     if (!state.meter)
       throw new RangeError(`A(z) ${index}. kapcsolónak nincs mérője.`);
-    commitMeterEnergy(state, new Date());
+    commitDeviceEnergy(this.device, new Date());
     const before = structuredClone(state);
     Object.assign(state.meter, patch);
     this.changed(index, before, 'onMeterChanged');
@@ -148,7 +151,7 @@ export class SimulatedDevice {
     const state = this.switch(index);
     if (!state.meter)
       throw new RangeError(`A(z) ${index}. kapcsolónak nincs mérője.`);
-    commitMeterEnergy(state, new Date());
+    commitDeviceEnergy(this.device, new Date());
     const before = structuredClone(state);
     state.meter.energyTotalWh = 0;
     state.meter.energyTodayWh = 0;
@@ -174,13 +177,13 @@ export class SimulatedDevice {
 
   /** Rögzíti az összes számlálót a megadott pillanatig (mentés előtt). */
   commitEnergy(now: Date): void {
-    for (const state of this.device.switches) commitMeterEnergy(state, now);
+    commitDeviceEnergy(this.device, now);
   }
 
   /** Igaz, ha valamelyik kimenet éppen fogyaszt, azaz a számláló nő. */
   get isConsuming(): boolean {
     return this.device.switches.some(
-      (s) => s.output && (s.meter?.loadPower ?? 0) > 0,
+      (s) => (s.meter?.loadPower ?? 0) > 0 && meterActive(this.device, s),
     );
   }
 
