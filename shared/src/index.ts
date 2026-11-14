@@ -133,6 +133,69 @@ export interface TasmotaConfig {
   powerRetain: boolean;
 }
 
+export const TASMOTA_MAX_RELAYS = 8;
+export const TASMOTA_MAX_SENSORS = 8;
+export const TASMOTA_TELEPERIOD_MIN = 10;
+export const TASMOTA_TELEPERIOD_MAX = 3600;
+
+/** A Tasmota alapértékei (FullTopic, GroupTopic, TelePeriod, SetOption-ök). */
+export const TASMOTA_DEFAULTS = {
+  fullTopic: '%prefix%/%topic%/',
+  groupTopic: 'tasmotas',
+  telePeriod: 300,
+  publishOnChange: true,
+  powerRetain: false,
+} as const;
+
+export type TasmotaPrefix = 'cmnd' | 'stat' | 'tele';
+
+/** Az alapértelmezett topic a MAC utolsó hat jegyéből, pl. tasmota_BE54DC. */
+export function defaultTasmotaTopic(mac: string): string {
+  return `tasmota_${mac.slice(-6).toUpperCase()}`;
+}
+
+function resolveFullTopic(
+  fullTopic: string,
+  topic: string,
+  mac: string,
+  prefix: TasmotaPrefix,
+  command: string,
+): string {
+  let resolved = fullTopic
+    .replaceAll('%prefix%', prefix)
+    .replaceAll('%topic%', topic)
+    .replaceAll('%id%', mac.slice(-6).toUpperCase());
+  if (!resolved.endsWith('/')) resolved += '/';
+  return resolved + command;
+}
+
+/** Az eszköz teljes topicja egy előtaggal, pl. stat/tasmota_BE54DC/RESULT. */
+export function tasmotaTopic(
+  config: Pick<TasmotaConfig, 'fullTopic' | 'topic' | 'mac'>,
+  prefix: TasmotaPrefix,
+  command = '',
+): string {
+  return resolveFullTopic(config.fullTopic, config.topic, config.mac, prefix, command);
+}
+
+/** A csoporttopic parancstopicja, pl. cmnd/tasmotas/POWER. */
+export function tasmotaGroupTopic(
+  config: Pick<TasmotaConfig, 'fullTopic' | 'groupTopic' | 'mac'>,
+  command = '',
+): string {
+  return resolveFullTopic(config.fullTopic, config.groupTopic, config.mac, 'cmnd', command);
+}
+
+/** A relé kulcsa: egy relénél POWER, többnél POWER1 … POWERn. */
+export function tasmotaPowerKey(relayCount: number, index: number): string {
+  return relayCount === 1 ? 'POWER' : `POWER${index + 1}`;
+}
+
+/** A hőmérő kulcsa: egynél DS18B20, többnél DS18B20-1 … DS18B20-n. */
+export function tasmotaSensorKey(sensorCount: number, index: number): string {
+  return sensorCount === 1 ? 'DS18B20' : `DS18B20-${index + 1}`;
+}
+
 export interface MeterState {
   loadPower: number;
   voltage: number;
@@ -179,12 +242,29 @@ export interface DeviceView extends Device {
   status: DeviceRunStatus;
 }
 
-/** POST /api/devices törzse (egyelőre Shelly eszközökhöz). */
+/** A Tasmota beállításai felvételkor; az elhagyott mezők alapértéket kapnak. */
+export interface TasmotaSettings {
+  /** 12 hexadecimális jegy; elhagyva véletlenszerű */
+  mac?: string;
+  /** elhagyva tasmota_<a MAC utolsó hat jegye> */
+  topic?: string;
+  fullTopic?: string;
+  groupTopic?: string;
+  relayCount: number;
+  hasEnergy: boolean;
+  sensorCount: number;
+  telePeriod?: number;
+  publishOnChange?: boolean;
+  powerRetain?: boolean;
+}
+
+/** POST /api/devices törzse; a típusnak megfelelő beállítás kötelező. */
 export interface CreateDeviceRequest {
   name: string;
-  type: ShellyDeviceType;
+  type: DeviceType;
   enabled?: boolean;
-  shelly: {
+  tasmota?: TasmotaSettings;
+  shelly?: {
     generation: ShellyGeneration;
     /** 12 hexadecimális jegy; elhagyva véletlenszerű */
     mac?: string;
@@ -208,6 +288,8 @@ export interface UpdateDeviceRequest {
     /** Változásakor az eszköz újraindul, mint a valódi a perifériák átállítása után */
     addon?: { enabled: boolean; sensorCount: number };
   };
+  /** A relék, a mérő vagy a hőmérők számának változásakor az eszköz újraindul. */
+  tasmota?: Partial<Omit<TasmotaSettings, 'mac'>>;
 }
 
 /** PUT /api/devices/:id/sensors/:index törzse. */
