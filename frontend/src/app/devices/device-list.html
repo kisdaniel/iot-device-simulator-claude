@@ -1,28 +1,100 @@
-<h1 class="h3 mb-4">Eszközök</h1>
+<div class="d-flex flex-wrap align-items-center gap-2 mb-4">
+  <h1 class="h3 mb-0 me-auto">Eszközök</h1>
+  @if (store.count() > 0) {
+    <input
+      type="search"
+      class="form-control form-control-sm"
+      style="max-width: 14rem"
+      placeholder="Keresés névre, azonosítóra"
+      aria-label="Keresés"
+      [value]="query()"
+      (input)="setQuery($event)"
+    />
+    <select
+      class="form-select form-select-sm"
+      style="max-width: 10rem"
+      aria-label="Típus"
+      (change)="setType($event)"
+    >
+      <option value="">Minden típus</option>
+      <option value="shelly-1pm">Shelly 1PM</option>
+      <option value="shelly-2pm">Shelly 2PM</option>
+      <option value="tasmota">Tasmota</option>
+    </select>
+  }
+  <a class="btn btn-primary btn-sm" routerLink="/devices/new">
+    <i class="bi bi-plus-lg me-1" aria-hidden="true"></i>Új eszköz
+  </a>
+</div>
 
-@if (loading()) {
-  <div class="text-secondary" role="status">Betöltés…</div>
-} @else if (error(); as message) {
+@if (actionError(); as message) {
   <div class="alert alert-danger" role="alert">{{ message }}</div>
-} @else if (devices().length === 0) {
+}
+
+@if (!store.loaded()) {
+  <div class="text-secondary" role="status">Betöltés…</div>
+} @else if (store.error(); as message) {
+  <div class="alert alert-danger" role="alert">{{ message }}</div>
+} @else if (store.count() === 0) {
   <div class="card">
     <div class="card-body text-center py-5">
       <i class="bi bi-plug fs-1 text-secondary" aria-hidden="true"></i>
       <p class="h5 mt-3">Még nincs szimulált eszköz</p>
-      <p class="text-secondary mb-0">
-        Az eszközök felvétele a következő fejlesztési lépésben érkezik.
+      <p class="text-secondary">
+        Vegyél fel egy Shelly 1PM vagy 2PM eszközt, és már kapcsolhatod is.
       </p>
+      <a class="btn btn-primary" routerLink="/devices/new">Új eszköz</a>
     </div>
   </div>
+} @else if (filtered().length === 0) {
+  <p class="text-secondary">Nincs a szűrésnek megfelelő eszköz.</p>
 } @else {
   <div class="row row-cols-1 row-cols-md-2 row-cols-xl-3 g-3">
-    @for (device of devices(); track device.id) {
+    @for (device of filtered(); track device.id) {
       <div class="col">
         <div class="card h-100">
           <div class="card-body">
-            <h2 class="h5 card-title">{{ device.name }}</h2>
-            <p class="card-subtitle text-secondary mb-2">{{ typeLabel(device) }}</p>
-            <code>{{ identity(device) }}</code>
+            <div class="d-flex align-items-start gap-2">
+              <h2 class="h5 card-title mb-1 me-auto">
+                <a
+                  class="link-body-emphasis text-decoration-none"
+                  [routerLink]="['/devices', device.id]"
+                  >{{ device.name }}</a
+                >
+              </h2>
+              @if (device.status === 'online') {
+                <span class="badge text-bg-success">Elérhető</span>
+              } @else if (!device.enabled) {
+                <span class="badge text-bg-secondary">Lekapcsolva</span>
+              } @else {
+                <span class="badge text-bg-warning">Nem elérhető</span>
+              }
+            </div>
+            <p class="card-subtitle text-secondary small mb-3">
+              {{ typeLabel(device) }} · <code>{{ identity(device) }}</code>
+            </p>
+
+            <ul class="list-unstyled mb-0">
+              @for (sw of device.switches; track sw.index) {
+                <li class="d-flex align-items-center justify-content-between py-1">
+                  <div class="form-check form-switch mb-0">
+                    <input
+                      class="form-check-input"
+                      type="checkbox"
+                      role="switch"
+                      [id]="device.id + '-sw-' + sw.index"
+                      [checked]="sw.output"
+                      [disabled]="isBusy(device, sw.index)"
+                      (click)="toggle($event, device, sw.index, sw.output)"
+                    />
+                    <label class="form-check-label" [for]="device.id + '-sw-' + sw.index">{{
+                      switchLabel(device, sw.index)
+                    }}</label>
+                  </div>
+                  <span class="small text-secondary">{{ sw.output ? 'Be' : 'Ki' }}</span>
+                </li>
+              }
+            </ul>
           </div>
         </div>
       </div>

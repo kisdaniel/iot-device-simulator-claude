@@ -1,43 +1,73 @@
-import { Component, OnInit, inject, signal } from '@angular/core';
-import type { Device, DeviceType } from '@iot-sim/shared';
+import { Component, computed, inject, signal } from '@angular/core';
+import { RouterLink } from '@angular/router';
+import type { DeviceType, DeviceView } from '@iot-sim/shared';
 import { Api, errorMessage } from '../core/api';
-
-const TYPE_LABELS: Record<DeviceType, string> = {
-  'shelly-1pm': 'Shelly 1PM',
-  'shelly-2pm': 'Shelly 2PM',
-  tasmota: 'Tasmota',
-};
+import { DeviceStore } from '../core/device-store';
+import { identity, switchLabel, typeLabel } from './device-labels';
 
 @Component({
   selector: 'app-device-list',
+  imports: [RouterLink],
   templateUrl: './device-list.html',
 })
-export class DeviceList implements OnInit {
+export class DeviceList {
   private readonly api = inject(Api);
+  protected readonly store = inject(DeviceStore);
 
-  protected readonly devices = signal<Device[]>([]);
-  protected readonly loading = signal(true);
-  protected readonly error = signal<string | null>(null);
+  protected readonly query = signal('');
+  protected readonly typeFilter = signal<DeviceType | ''>('');
+  protected readonly actionError = signal<string | null>(null);
+  protected readonly busy = signal<ReadonlySet<string>>(new Set());
 
-  ngOnInit(): void {
-    this.api.listDevices().subscribe({
-      next: (devices) => {
-        this.devices.set(devices);
-        this.loading.set(false);
+  protected readonly filtered = computed(() => {
+    const query = this.query().trim().toLowerCase();
+    const type = this.typeFilter();
+    return this.store.devices().filter((d) => {
+      if (type && d.type !== type) return false;
+      if (!query) return true;
+      return d.name.toLowerCase().includes(query) || identity(d).includes(query);
+    });
+  });
+
+  protected readonly typeLabel = typeLabel;
+  protected readonly identity = identity;
+  protected readonly switchLabel = switchLabel;
+
+  protected isBusy(device: DeviceView, index: number): boolean {
+    return this.busy().has(`${device.id}:${index}`);
+  }
+
+  /** Nem optimista: a kapcsoló a szerver válasza szerint áll be. */
+  protected toggle(event: Event, device: DeviceView, index: number, output: boolean): void {
+    event.preventDefault();
+    const key = `${device.id}:${index}`;
+    this.busy.update((set) => new Set(set).add(key));
+    this.actionError.set(null);
+    this.api.setSwitch(device.id, index, !output).subscribe({
+      next: (view) => {
+        this.store.upsert(view);
+        this.done(key);
       },
       error: (err) => {
-        this.error.set(errorMessage(err));
-        this.loading.set(false);
+        this.actionError.set(errorMessage(err));
+        this.done(key);
       },
     });
   }
 
-  protected typeLabel(device: Device): string {
-    const generation = device.shelly ? ` Gen${device.shelly.generation}` : '';
-    return TYPE_LABELS[device.type] + generation;
+  protected setQuery(event: Event): void {
+    this.query.set((event.target as HTMLInputElement).value);
   }
 
-  protected identity(device: Device): string {
-    return device.shelly?.deviceId ?? device.tasmota?.topic ?? '';
+  protected setType(event: Event): void {
+    this.typeFilter.set((event.target as HTMLSelectElement).value as DeviceType | '');
+  }
+
+  private done(key: string): void {
+    this.busy.update((set) => {
+      const next = new Set(set);
+      next.delete(key);
+      return next;
+    });
   }
 }
