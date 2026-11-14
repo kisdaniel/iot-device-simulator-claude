@@ -14,6 +14,7 @@ import {
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import {
   CreateDeviceDto,
+  SetMeterDto,
   SetSwitchDto,
   UpdateDeviceDto,
 } from './devices.dto.js';
@@ -101,6 +102,29 @@ export class DevicesController {
     @Param('index', ParseIntPipe) index: number,
   ): DeviceView {
     return this.devices.setSwitch(id, index, 'toggle');
+  }
+
+  @Put(':id/switches/:index/meter')
+  @ApiOperation({
+    summary:
+      'Mért értékek (terhelés, feszültség, áram, számláló); csak a megadott mezők változnak',
+  })
+  setMeter(
+    @Param('id') id: string,
+    @Param('index', ParseIntPipe) index: number,
+    @Body() dto: SetMeterDto,
+  ): DeviceView {
+    return this.devices.setMeter(id, index, dto);
+  }
+
+  @Post(':id/switches/:index/meter/reset')
+  @HttpCode(200)
+  @ApiOperation({ summary: 'Az energiaszámláló nullázása' })
+  resetEnergy(
+    @Param('id') id: string,
+    @Param('index', ParseIntPipe) index: number,
+  ): DeviceView {
+    return this.devices.resetEnergy(id, index);
   }
 
   @Get(':id/messages')
