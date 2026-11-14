@@ -122,7 +122,7 @@ export class ShellyProfile implements DeviceProfile {
       const now = new Date();
       minutes.base.set(
         index,
-        base + energyAt(state, now) - energyAt(before, now),
+        base + energyAt(state, now).total - energyAt(before, now).total,
       );
     }
     this.notifyChange(ctx, index, before);
@@ -167,7 +167,7 @@ export class ShellyProfile implements DeviceProfile {
     if (minutes.current === undefined) {
       minutes.current = minute;
       for (const state of ctx.device.switches) {
-        minutes.base.set(state.index, energyAt(state, now));
+        minutes.base.set(state.index, energyAt(state, now).total);
       }
       return;
     }
@@ -178,7 +178,7 @@ export class ShellyProfile implements DeviceProfile {
     const prefix = shellyTopicPrefix(config);
     const params: Record<string, unknown> = { ts: shellyTimestamp(now) };
     for (const state of ctx.device.switches) {
-      const energy = energyAt(state, now);
+      const energy = energyAt(state, now).total;
       const base = minutes.base.get(state.index) ?? energy;
       const history = minutes.byMinute.get(state.index) ?? [0, 0, 0];
       // Az elmúlt perc energiája mWh-ban kerül a lista elejére.
