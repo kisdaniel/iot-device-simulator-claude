@@ -81,7 +81,7 @@ describe('buildHomeAssistantConfig', () => {
       warnings: [],
     });
     expect(switches[1]).toMatchObject({
-      name: 'Nappali 2',
+      name: 'Kimenet 2',
       unique_id: 'iotsim_shelly2pmg3_a8032abe54dc_switch_1',
       command_topic: 'shelly2pmg3-a8032abe54dc/command/switch:1',
       payload_on: 'on',
@@ -110,10 +110,12 @@ describe('buildHomeAssistantConfig', () => {
       unit_of_measurement: 'Wh',
       device_class: 'energy',
       state_class: 'total_increasing',
+      name: 'Kimenet 1 energia',
       value_template: '{{ value_json.aenergy.total }}',
     });
     expect(sensors.find((s) => s.device_class === 'temperature')).toMatchObject(
       {
+        name: 'Hőmérő 1',
         state_topic: 'shelly2pmg3-a8032abe54dc/status/temperature:100',
         value_template: '{{ value_json.tC }}',
       },
@@ -136,9 +138,7 @@ describe('buildHomeAssistantConfig', () => {
   it('Shelly: állapotüzenetek nélkül a NotifyStatus értesítésekből olvas, és figyelmeztet', () => {
     const { result, switches } = entities([shelly({ statusNtf: false })]);
     expect(switches[0].state_topic).toBe('shelly2pmg3-a8032abe54dc/events/rpc');
-    expect(switches[0].value_template).toContain(
-      "'output' in c else this.state",
-    );
+    expect(switches[0].value_template).toContain("'output' in c else '' }}");
     expect(result.warnings).toHaveLength(1);
   });
 
@@ -155,7 +155,8 @@ describe('buildHomeAssistantConfig', () => {
     const { switches, sensors } = entities([tasmota()]);
     expect(switches).toEqual([
       expect.objectContaining({
-        name: 'Mosógép',
+        // Egy relénél az entitás csak az eszköz nevét kapja a Home Assistantben.
+        name: null,
         command_topic: 'cmnd/tasmota_BE54DC/POWER',
         state_topic: 'stat/tasmota_BE54DC/POWER',
         availability_topic: 'tele/tasmota_BE54DC/LWT',
@@ -165,6 +166,7 @@ describe('buildHomeAssistantConfig', () => {
     expect(
       sensors.find((s) => s.unique_id === 'iotsim_a8032abe54dc_energy'),
     ).toMatchObject({
+      name: 'Energia',
       state_topic: 'tele/tasmota_BE54DC/SENSOR',
       value_template: '{{ value_json.ENERGY.Total }}',
       unit_of_measurement: 'kWh',
@@ -172,8 +174,9 @@ describe('buildHomeAssistantConfig', () => {
     expect(
       sensors.find((s) => s.unique_id === 'iotsim_a8032abe54dc_ds18b20_2'),
     ).toMatchObject({
+      name: 'DS18B20-2',
       value_template:
-        "{{ value_json['DS18B20-2'].Temperature if 'DS18B20-2' in value_json else this.state }}",
+        "{{ value_json['DS18B20-2'].Temperature if 'DS18B20-2' in value_json else '' }}",
     });
   });
 
