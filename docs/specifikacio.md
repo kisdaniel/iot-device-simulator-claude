@@ -118,6 +118,7 @@ A követelmények azonosítója a technikai specifikációban és a tesztekben h
 | F-72 | A discoveryvel felvett Tasmota eszközök alapból kimaradnak, mert a Home Assistant már felismeri őket; kérésre bekerülnek. A generátor figyelmeztet, ha egy eszköz beállítása miatt az entitás nem kap állapotot (például kikapcsolt Shelly-értesítések). | K |
 | F-73 | A felület a konfiguráció mellé `docker-compose.yml`-t is generál egy Home Assistanttel és egy Mosquitto MQTT-brokerrel. A Home Assistant a generált konfigurációt egy rögzített útvonalról tölti be; a fájlok mentése a felhasználó dolga, a felület megmondja, melyiket hová kell menteni. | K |
 | F-74 | A compose a Home Assistant és a broker portját környezeti változóval felülírhatóvá teszi, hogy ne ütközzön a szimulátor saját brokerével. A Home Assistant MQTT-integrációját egyszer a felületén kell felvenni (broker: `mosquitto`), mert a brokerkapcsolat YAML-ből nem állítható be; a compose fejléce ezt lépésenként leírja. | K |
+| F-75 | A compose minden adatot a mellette lévő mappákba ment (Home Assistant konfiguráció, beállítások, integrációk, előzmények; a broker konfigurációja és üzenetei), hogy a konténer újralétrehozása után is megmaradjon, és a fájlrendszerből elérhető legyen. A kezdő konfigurációs fájlokat első induláskor létrehozza, de a meglévőket nem írja felül. | K |
 
 ## Felhasználói felület
 

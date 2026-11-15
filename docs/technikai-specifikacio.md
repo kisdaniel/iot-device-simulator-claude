@@ -681,22 +681,31 @@ A generátor (`buildHomeAssistantConfig`) `configuration.yaml`-ba másolható `m
 
 A sablonok hiányzó kulcsnál üres szöveget adnak, mert ugyanazon a topicon más szerkezetű üzenet is jöhet: a Home Assistant az üres értéket figyelmen kívül hagyja, és az állapot marad. A `this.state` itt nem jó, mert amíg nincs érték, `unknown`, és azt a számszenzor hibaként naplózza. A YAML 1.1 szerint íródik (`version: '1.1'`), hogy az `on`, `off`, `ON`, `OFF` értékek idézőjelet kapjanak: a Home Assistant YAML-olvasója ezeket különben logikai értékké alakítaná. A discoveryvel felvett Tasmota eszközök alapból kimaradnak, mert a Home Assistant Tasmota integrációja már létrehozta az entitásaikat.
 
-**Docker Compose.** A `buildHomeAssistantCompose` egy `docker-compose.yml`-t ad két szolgáltatással; a mentés a felhasználó dolga, a felület és a fájl fejléce megadja az útvonalakat:
+**Docker Compose.** A `buildHomeAssistantCompose` egy `docker-compose.yml`-t ad. Minden adat a compose melletti mappákba kerül (bind mount), nevesített Docker-kötet nincs: a konténerek újralétrehozása, frissítése vagy törlése után is megmarad, és a fájlrendszerből olvasható, menthető. A compose-t és a generált konfigurációt a felhasználó menti; a felület és a fájl fejléce megadja az útvonalakat:
 
 ```text
 <mappa>/
   docker-compose.yml
-  homeassistant/packages/iot_simulator.yaml   ← a generált Home Assistant konfiguráció
+  homeassistant/                      ← a Home Assistant /config mappája
+    configuration.yaml                ← kezdő fájl a setup lépésből, szabadon szerkeszthető
+    automations.yaml, scripts.yaml, scenes.yaml, themes/
+    packages/iot_simulator.yaml       ← a generált Home Assistant konfiguráció
+    .storage/                         ← felhasználók, integrációk (köztük az MQTT), eszköz- és entitásjegyzék
+    home-assistant_v2.db              ← előzmények és statisztikák (recorder)
+  mosquitto/
+    config/mosquitto.conf             ← kezdő fájl a setup lépésből
+    data/                             ← a broker megőrzött üzenetei
 ```
 
-| Szolgáltatás | Kép | Port | Konfiguráció |
+| Szolgáltatás | Kép | Port | Mappák és konfiguráció |
 | --- | --- | --- | --- |
-| `mosquitto` | `eclipse-mosquitto:2` | `${MQTT_PORT:-1883}:1883` | Beágyazott `mosquitto.conf` (`configs.content`): névtelen kapcsolódás, perzisztencia a `mosquitto-data` kötetben |
-| `homeassistant` | `ghcr.io/home-assistant/home-assistant:stable` | `${HA_PORT:-8123}:8123` | Beágyazott `configuration.yaml` (`default_config` + `packages: !include_dir_named packages`); a `./homeassistant/packages` mappa csak olvashatóan a `/config/packages` alá kerül; `/config` a `homeassistant-config` kötetben; `TZ` a szerver időzónája, felülírható |
+| `setup` | `ghcr.io/home-assistant/home-assistant:stable` | – | Egyszer fut minden indításkor (`restart: no`): létrehozza a mappákat és a hiányzó kezdő fájlokat a beágyazott (`configs.content`) tartalomból. Meglévő fájlt nem ír felül, így a kézi módosítások megmaradnak. A Home Assistant képét használja, hogy ne kelljen további képet letölteni |
+| `mosquitto` | `eclipse-mosquitto:2` | `${MQTT_PORT:-1883}:1883` | `./mosquitto/config` és `./mosquitto/data`; névtelen kapcsolódás, perzisztencia. A `setup` sikeres lefutása után indul |
+| `homeassistant` | `ghcr.io/home-assistant/home-assistant:stable` | `${HA_PORT:-8123}:8123` | `./homeassistant` a `/config`; `TZ` a szerver időzónája, felülírható. A `setup` után és a broker indulása után indul |
 
-A generált konfiguráció csomagként töltődik be, ezért változtatás nélkül, a saját `mqtt:` kulcsával használható. A mappát csatoljuk, nem a fájlt: ha a fájl még hiányzik, a Home Assistant akkor is elindul. A beágyazott tartalomhoz Docker Compose 2.23.1 vagy újabb kell, és benne a `$` jelet a generátor `$$`-ra cseréli, mert a Compose változóként értené. A Home Assistant MQTT-brokerének címe YAML-ből nem adható meg, ezért az integrációt egyszer a felületen kell felvenni (broker `mosquitto`, port 1883). A szimulátornak ugyanehhez a brokerhez kell kapcsolódnia; ha a saját Mosquittója foglalja az 1883-as portot, a compose `MQTT_PORT=1884` értékkel indítható.
+A kezdő `configuration.yaml` a Home Assistant saját alapértelmezését követi (`default_config`, témák, valamint az `automations.yaml`, `scripts.yaml` és `scenes.yaml` include-ja, hogy a felületen létrehozott automatizálások is betöltődjenek), és a `packages: !include_dir_named packages` sorral tölti be a csomagokat. A generált konfiguráció így változtatás nélkül, a saját `mqtt:` kulcsával használható; ha a fájl még hiányzik, a Home Assistant akkor is elindul. A beágyazott tartalomhoz Docker Compose 2.23.1 vagy újabb kell, és benne a `$` jelet a generátor `$$`-ra cseréli, mert a Compose változóként értené. A Home Assistant MQTT-brokerének címe YAML-ből nem adható meg, ezért az integrációt egyszer a felületen kell felvenni (broker `mosquitto`, port 1883); ez a `.storage` mappába kerül, így újraindítás után megmarad. A szimulátornak ugyanehhez a brokerhez kell kapcsolódnia; ha a saját Mosquittója foglalja az 1883-as portot, a compose `MQTT_PORT=1884` értékkel indítható. A konténerek root felhasználóval írnak, ezért a létrejövő fájlok a gazdagépen is a root tulajdonában lehetnek.
 
-A generált fájlokat valódi Home Assistant (2026.2) példánnyal ellenőriztük a szimulátor brokerén: mind a 24 próbaentitás létrejött, a szimulátorban végzett kapcsolás és a mért értékek megjelentek, a Home Assistantből indított kapcsolás pedig a szimulátorban.
+A generált fájlokat valódi Home Assistant (2026.2) példánnyal ellenőriztük a szimulátor brokerén: mind a 24 próbaentitás létrejött, a szimulátorban végzett kapcsolás és a mért értékek megjelentek, a Home Assistantből indított kapcsolás pedig a szimulátorban. A mappaszerkezettel futtatva a felhasználó, az MQTT-integráció, a felületen létrehozott automatizálás és az entitások újraindítás után is megmaradtak, és az adatbázis a `homeassistant/` mappában jött létre.
 
 ### Tesztelés
 
