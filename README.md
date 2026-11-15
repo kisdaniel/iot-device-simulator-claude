@@ -2,7 +2,7 @@
 
 Shelly (1PM, 2PM, Add-on; Gen2, Gen3, Gen4) és Tasmota eszközök szimulációja MQTT-n keresztül, webes kezelőfelülettel. A szimulált eszközök ugyanazokat az üzeneteket küldik és fogadják, mint a valódiak, így a rájuk épülő rendszerek hardver nélkül tesztelhetők.
 
-> **Állapot:** felvehető Shelly 1PM és 2PM (Gen2, Gen3, Gen4) opcionális Add-onnal (1–5 DS18B20), valamint Tasmota eszköz 1–8 relével, fogyasztásmérővel, 0–8 DS18B20 hőmérővel és eszközönként bekapcsolható discoveryvel. A kapcsolók MQTT-ről és a felületről is állíthatók (Shellyn időzített visszakapcsolással: `toggle_after`, ill. `on,<mp>`), a mért értékek a felületről adhatók meg. A felvett eszközökből a „Home Assistant” oldalon MQTT-konfiguráció generálható, és mellé egy `docker-compose.yml`, amely Home Assistantet és Mosquitto brokert indít, és betölti ezt a konfigurációt. A teljes konfiguráció JSON fájlba exportálható és onnan importálható, a felületről és induláskor (`CONFIG_FILE`) is. A további lépéseket a [technikai specifikáció](docs/technikai-specifikacio.md) „Megvalósítási lépések” szakasza írja le.
+> **Állapot:** felvehető Shelly 1PM és 2PM (Gen2, Gen3, Gen4) opcionális Add-onnal (1–5 DS18B20), valamint Tasmota eszköz 1–8 relével, fogyasztásmérővel, 0–8 DS18B20 hőmérővel és eszközönként bekapcsolható discoveryvel. A kapcsolók MQTT-ről és a felületről is állíthatók (Shellyn időzített visszakapcsolással: `toggle_after`, ill. `on,<mp>`), a mért értékek a felületről adhatók meg. A felvett eszközökből a „Home Assistant” oldalon MQTT-konfiguráció generálható, és mellé egy `docker-compose.yml`, amely Home Assistantet indít, és betölti ezt a konfigurációt; Mosquitto broker (jelszavas védelemmel is), Node-RED és maga a szimulátor is kérhető bele. A teljes konfiguráció JSON fájlba exportálható és onnan importálható, a felületről és induláskor (`CONFIG_FILE`) is. A további lépéseket a [technikai specifikáció](docs/technikai-specifikacio.md) „Megvalósítási lépések” szakasza írja le.
 
 ## Dokumentáció
 
@@ -14,6 +14,8 @@ Shelly (1PM, 2PM, Add-on; Gen2, Gen3, Gen4) és Tasmota eszközök szimulációj
 ```bash
 docker compose up --build
 ```
+
+A kép `iot-device-simulator:latest` néven épül (önállóan: `docker build -t iot-device-simulator:latest .`). Ezt a nevet használja a Home Assistant oldalon generált `docker-compose.yml` is, ha a szimulátort is beleteszed.
 
 - Felület: <http://localhost:3000>
 - API-leírás (Swagger): <http://localhost:3000/api/docs>
