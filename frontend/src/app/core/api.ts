@@ -5,6 +5,8 @@ import type {
   BrokerTestResult,
   CreateDeviceRequest,
   DeviceView,
+  ComposeOptions,
+  HomeAssistantComposeResult,
   HomeAssistantConfigResult,
   ImportError,
   ImportMode,
@@ -81,6 +83,18 @@ export class Api {
   importConfig(file: unknown, mode: ImportMode, dryRun: boolean): Observable<ImportSummary> {
     return this.http.post<ImportSummary>('/api/config/import', file, {
       params: { mode, dryRun: String(dryRun) },
+    });
+  }
+
+  /** A compose a megadott beállításokkal; a jelszó a törzsben megy, nem az URL-ben. */
+  homeAssistantCompose(options: ComposeOptions): Observable<HomeAssistantComposeResult> {
+    return this.http.post<HomeAssistantComposeResult>('/api/homeassistant/compose', options);
+  }
+
+  /** Ugyanez letöltésre, fájlként. */
+  homeAssistantComposeFile(options: ComposeOptions): Observable<Blob> {
+    return this.http.post('/api/homeassistant/docker-compose.yml', options, {
+      responseType: 'blob',
     });
   }
 

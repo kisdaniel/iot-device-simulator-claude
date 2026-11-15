@@ -1,25 +1,37 @@
 import { Component, computed, effect, inject, signal, untracked } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import {
+  type ComposeOptions,
+  DEFAULT_COMPOSE_OPTIONS,
   type DeviceView,
   HOMEASSISTANT_CONFIG_PATH,
+  HOMEASSISTANT_DATA_DIR,
+  type HomeAssistantComposeResult,
   type HomeAssistantConfigResult,
+  MOSQUITTO_DATA_DIR,
+  NODERED_DATA_DIR,
+  SIMULATOR_DATA_DIR,
 } from '@iot-sim/shared';
 import { Api, errorMessage, homeAssistantParams } from '../core/api';
 import { DeviceStore } from '../core/device-store';
 import { identity, typeLabel } from '../devices/device-labels';
+import { ComposeOptionsForm } from './compose-options-form';
+
+/** Ennyi ms-ot vár a compose előnézete a beállítások utolsó változása után. */
+export const COMPOSE_DEBOUNCE_MS = 300;
 
 /** A két megjelenített fájl: a Home Assistant konfiguráció és a hozzá tartozó compose. */
 export type HomeAssistantView = 'config' | 'compose';
 
 /**
  * Home Assistant MQTT-konfiguráció a felvett eszközökből, és egy docker-compose.yml
- * Home Assistanttel és Mosquittóval: kiválasztás, előnézet, másolás és letöltés. A fájlokat
- * a backend állítja elő; a felület megmutatja, hová kell menteni őket.
+ * Home Assistanttel, valamint választhatóan Mosquittóval, Node-RED-del és magával a
+ * szimulátorral: kiválasztás, beállítások, előnézet, másolás és letöltés. A fájlokat a
+ * backend állítja elő; a felület megmutatja, hová kell menteni őket.
  */
 @Component({
   selector: 'app-homeassistant-page',
-  imports: [RouterLink],
+  imports: [RouterLink, ComposeOptionsForm],
   templateUrl: './homeassistant-page.html',
 })
 export class HomeAssistantPage {
@@ -37,15 +49,36 @@ export class HomeAssistantPage {
   /** Ide kell menteni a konfigurációt a docker-compose.yml mellé. */
   protected readonly configPath = HOMEASSISTANT_CONFIG_PATH;
 
+  /** A compose beállításai; null, ha az űrlap valamelyik mezője hibás. */
+  protected readonly composeOptions = signal<ComposeOptions | null>(DEFAULT_COMPOSE_OPTIONS);
+  protected readonly composeResult = signal<HomeAssistantComposeResult | null>(null);
+  protected readonly composeError = signal<string | null>(null);
+
   /** Az éppen látható fájl tartalma; ezt másolja a Másolás gomb. */
-  protected readonly content = computed(() => {
-    const result = this.result();
-    if (!result) return '';
-    return this.view() === 'compose' ? result.compose : result.yaml;
-  });
-  protected readonly canExport = computed(
-    () => this.view() === 'compose' || (this.result()?.entityCount ?? 0) > 0,
+  protected readonly content = computed(() =>
+    this.view() === 'compose' ? (this.composeResult()?.compose ?? '') : (this.result()?.yaml ?? ''),
   );
+  protected readonly canExport = computed(() =>
+    this.view() === 'compose'
+      ? this.composeOptions() !== null && this.composeResult() !== null
+      : (this.result()?.entityCount ?? 0) > 0,
+  );
+  protected readonly warnings = computed(() =>
+    this.view() === 'compose'
+      ? (this.composeResult()?.warnings ?? [])
+      : (this.result()?.warnings ?? []),
+  );
+
+  /** A compose melletti mappák, ahová az adatok kerülnek. */
+  protected readonly dataFolders = computed(() => {
+    const options = this.composeOptions() ?? DEFAULT_COMPOSE_OPTIONS;
+    return [
+      HOMEASSISTANT_DATA_DIR,
+      ...(options.mosquitto.enabled ? [MOSQUITTO_DATA_DIR] : []),
+      ...(options.nodeRed.enabled ? [NODERED_DATA_DIR] : []),
+      ...(options.simulator.enabled ? [SIMULATOR_DATA_DIR] : []),
+    ].map((folder) => `${folder}/`);
+  });
 
   protected readonly typeLabel = typeLabel;
   protected readonly identity = identity;
@@ -58,9 +91,8 @@ export class HomeAssistantPage {
   );
   protected readonly allSelected = computed(() => this.excluded().size === 0);
 
-  /** A letöltés címe: a compose független a kiválasztástól, a konfiguráció követi. */
+  /** A konfiguráció letöltésének címe a kiválasztás szerint (a compose POST-tal töltődik le). */
   protected readonly downloadUrl = computed(() => {
-    if (this.view() === 'compose') return '/api/homeassistant/docker-compose.yml';
     const params = new URLSearchParams(
       homeAssistantParams(this.allSelected() ? null : this.selectedIds(), this.includeDiscovered()),
     ).toString();
@@ -87,6 +119,41 @@ export class HomeAssistantPage {
         },
         error: (err) => this.error.set(errorMessage(err)),
       });
+    });
+
+    // A compose a beállítások változására, rövid várakozás után frissül, hogy ne
+    // menjen kérés minden leütésre. Hibás beállításnál az előző előnézet marad, de
+    // a másolás és a letöltés tiltva van.
+    effect((onCleanup) => {
+      const options = this.composeOptions();
+      if (!options) return;
+      const timer = setTimeout(() => {
+        this.api.homeAssistantCompose(options).subscribe({
+          next: (result) => {
+            this.composeResult.set(result);
+            this.composeError.set(null);
+          },
+          error: (err) => this.composeError.set(errorMessage(err)),
+        });
+      }, COMPOSE_DEBOUNCE_MS);
+      onCleanup(() => clearTimeout(timer));
+    });
+  }
+
+  /** A compose letöltése: POST, mert a beállítások jelszót is tartalmazhatnak. */
+  protected downloadCompose(): void {
+    const options = this.composeOptions();
+    if (!options) return;
+    this.api.homeAssistantComposeFile(options).subscribe({
+      next: (blob) => {
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = 'docker-compose.yml';
+        link.click();
+        URL.revokeObjectURL(url);
+      },
+      error: (err) => this.composeError.set(errorMessage(err)),
     });
   }
 
