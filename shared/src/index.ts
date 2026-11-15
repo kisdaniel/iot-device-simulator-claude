@@ -417,12 +417,59 @@ export const HOMEASSISTANT_DATA_DIR = 'homeassistant';
 /** A Mosquitto konfigurációja és adatai a docker-compose.yml mellett. */
 export const MOSQUITTO_DATA_DIR = 'mosquitto';
 export const HOMEASSISTANT_CONFIG_PATH = `${HOMEASSISTANT_PACKAGES_DIR}/${HOMEASSISTANT_CONFIG_FILE}`;
+/** A Node-RED /data mappája a docker-compose.yml mellett. */
+export const NODERED_DATA_DIR = 'node-red';
+/** A szimulátor /data mappája a docker-compose.yml mellett. */
+export const SIMULATOR_DATA_DIR = 'simulator';
+/** Ide kell menteni a konfiguráció exportját, ha a szimulátor ezzel induljon (kezdő eszközlista). */
+export const SIMULATOR_SEED_PATH = `${SIMULATOR_DATA_DIR}/devices.json`;
+/** A szimulátor képének alapértelmezett neve; a saját docker-compose.yml is ezen a néven építi. */
+export const SIMULATOR_DEFAULT_IMAGE = 'iot-device-simulator:latest';
+
+/** A generált docker-compose.yml beállításai (POST /api/homeassistant/compose). */
+export interface ComposeOptions {
+  mosquitto: {
+    /** Legyen-e Mosquitto broker a compose-ban. */
+    enabled: boolean;
+    /** Jelszavas védelem; null vagy hiányzik: névtelen kapcsolódás. */
+    auth?: { username: string; password: string } | null;
+  };
+  /** Csak ha nincs generált Mosquitto: a használandó broker. */
+  broker?: {
+    host: string;
+    port: number;
+    username?: string | null;
+    password?: string | null;
+  } | null;
+  nodeRed: { enabled: boolean };
+  simulator: {
+    enabled: boolean;
+    /** A gépen már meglévő kép neve; a compose nem építi és nem tölti le. */
+    image: string;
+    /** Első induláskor a SIMULATOR_SEED_PATH fájlból töltse be az eszközöket. */
+    seedDevices: boolean;
+  };
+}
+
+/** Az alapbeállítás: Mosquitto jelszó nélkül, Node-RED és szimulátor nélkül. */
+export const DEFAULT_COMPOSE_OPTIONS: ComposeOptions = {
+  mosquitto: { enabled: true, auth: null },
+  broker: null,
+  nodeRed: { enabled: false },
+  simulator: { enabled: false, image: SIMULATOR_DEFAULT_IMAGE, seedDevices: false },
+};
+
+/** A generált compose és a hozzá tartozó figyelmeztetések. */
+export interface HomeAssistantComposeResult {
+  compose: string;
+  warnings: string[];
+}
 
 /** A GET /api/homeassistant/config válasza. */
 export interface HomeAssistantConfigResult {
   /** A configuration.yaml-ba másolható `mqtt:` blokk */
   yaml: string;
-  /** Home Assistant és Mosquitto docker-compose.yml; a fenti konfigurációt a HOMEASSISTANT_CONFIG_PATH útvonalról tölti be */
+  /** docker-compose.yml az alapbeállításokkal (DEFAULT_COMPOSE_OPTIONS); a fenti konfigurációt a HOMEASSISTANT_CONFIG_PATH útvonalról tölti be */
   compose: string;
   /** A konfigurációba került eszközök száma */
   deviceCount: number;
