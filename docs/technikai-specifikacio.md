@@ -424,7 +424,9 @@ Minden végpont az `/api` előtag alatt van, JSON-t fogad és ad vissza; a módo
 | GET | `/api/events` | – | SSE eseményfolyam |
 | GET | `/api/homeassistant/config` | – | Home Assistant MQTT-konfiguráció és a hozzá tartozó compose: `{ yaml, compose, deviceCount, entityCount, warnings }`; szűrés: `?ids=a,b`, `?includeDiscovered=true` |
 | GET | `/api/homeassistant/config.yaml` | – | Ugyanaz a YAML letölthető fájlként (`iot_simulator.yaml`, `text/yaml`, `Content-Disposition: attachment`) |
-| GET | `/api/homeassistant/docker-compose.yml` | – | Home Assistant és Mosquitto compose-fájl letöltésre; nem függ a kiválasztástól |
+| GET | `/api/homeassistant/docker-compose.yml` | – | Compose-fájl letöltésre az alapbeállításokkal (Mosquitto jelszó nélkül, Node-RED nélkül); nem függ a kiválasztástól |
+| POST | `/api/homeassistant/compose` | `ComposeOptions` | A compose a megadott beállításokkal: `{ compose, warnings }`; hibás beállításra 400 mezőszintű hibalistával |
+| POST | `/api/homeassistant/docker-compose.yml` | `ComposeOptions` | Ugyanez letölthető fájlként (`Content-Disposition: attachment`) |
 
 Konfiguráció és üzemeltetés:
 
@@ -707,6 +709,52 @@ A kezdő `configuration.yaml` a Home Assistant saját alapértelmezését követ
 
 A generált fájlokat valódi Home Assistant (2026.2) példánnyal ellenőriztük a szimulátor brokerén: mind a 24 próbaentitás létrejött, a szimulátorban végzett kapcsolás és a mért értékek megjelentek, a Home Assistantből indított kapcsolás pedig a szimulátorban. A mappaszerkezettel futtatva a felhasználó, az MQTT-integráció, a felületen létrehozott automatizálás és az entitások újraindítás után is megmaradtak, és az adatbázis a `homeassistant/` mappában jött létre.
 
+**A compose beállításai (F-76–F-80).** A felület a compose fülön állítja be, mi kerüljön a fájlba; a backend a `POST` végpontokon kapja meg a beállításokat, mert a jelszó nem kerülhet URL-be, naplóba vagy az adatbázisba.
+
+```ts
+interface ComposeOptions {
+  mosquitto: {
+    enabled: boolean;                       // alapból true
+    auth?: { username: string; password: string } | null;  // jelszavas védelem; null: névtelen
+  };
+  /** Csak ha nincs generált Mosquitto: a használandó broker. */
+  broker?: { host: string; port: number; username?: string | null; password?: string | null };
+  nodeRed: { enabled: boolean };            // alapból false
+}
+```
+
+| Szabály | Részletek |
+| --- | --- |
+| Validáció | Felhasználónév: 1–64 karakter, szóköz és `:` nélkül (a Mosquitto jelszófájl `felhasználó:hash` sorokból áll). Jelszó: 1–128 karakter. Külső broker: a host kötelező, a port 1–65535. Hibára 400 mezőszintű hibalistával (`mosquitto.auth.password`, `broker.host`). |
+| Előtöltés | A felület a külső broker mezőit a szimulátor brokerbeállításából tölti (`GET /api/broker`), jelszó nélkül; a jelszót újra be kell írni. |
+| Titok kezelése | A backend a jelszót csak a válasz előállításához használja, nem tárolja és nem naplózza; a válasz a `Cache-Control: no-store` fejlécet kapja. A felület a jelszót csak memóriában tartja, a böngésző tárolójába nem írja. A compose-ban a jelszó környezeti változóként szerepel; a generátor a `$` jelet `$$`-ra cseréli, és a szkriptek a jelszót változóból olvassák, nem a parancssorba írva. |
+| Figyelmeztetések | A válasz `warnings` listája jelzi: a jelszó olvasható formában van a fájlban; jelszavas védelemnél a szimulátort és a Home Assistant integrációját is ezzel a felhasználóval kell beállítani; külső brokernél a broker elérhetőségét a felhasználónak kell biztosítania. |
+
+**Mosquitto jelszavas védelemmel.** A `mosquitto.conf` ekkor `allow_anonymous false` és `password_file /mosquitto/config/passwd` sort kap. A jelszófájlt egy külön előkészítő lépés (`mosquitto-setup`, `eclipse-mosquitto:2` kép) hozza létre minden indításkor a `mosquitto_passwd -b -c` paranccsal, a compose-ban megadott `MQTT_USERNAME` és `MQTT_PASSWORD` változóból; így a fájlban csak a hash van, és a compose a jelszó egyetlen forrása. A `-c` új fájlt hoz létre, ezért kézzel felvett további felhasználók elvesznek: aki több felhasználót akar, a jelszófájlt maga kezelje, és kapcsolja ki a védelmet a generátorban. Mivel a Mosquitto konfigurációja a compose beállításait követi, a `mosquitto.conf`-ot és a `passwd`-t az előkészítő lépés minden indításkor újraírja (a Home Assistant fájljaival ellentétben).
+
+**Generált Mosquitto nélkül.** A `mosquitto` és a `mosquitto-setup` szolgáltatás kimarad, a `homeassistant` nem függ tőlük. A Home Assistant és a Node-RED a `host.docker.internal` nevet is feloldja (`extra_hosts: host.docker.internal:host-gateway`), így a gépen futó szimulátor brokere ezen a néven elérhető. A broker adatai a Node-RED beállításába kerülnek; a Home Assistant integrációját itt is a felületen kell felvenni.
+
+**Node-RED.** Új szolgáltatás:
+
+| Elem | Érték |
+| --- | --- |
+| Kép | `nodered/node-red`, a megvalósításkor rögzített stabil főverzióval |
+| Port | `${NODERED_PORT:-1880}:1880` |
+| Adatok | `./node-red` → `/data` (folyamok, hitelesítő adatok, telepített csomópontok); a konténer az 1000-es felhasználóval fut, ezért az előkészítő lépés a mappát `1000:1000` tulajdonba adja |
+| Környezet | `MQTT_HOST` (`mosquitto` vagy a külső broker), `MQTT_PORT`, `MQTT_USERNAME`, `MQTT_PASSWORD`, `TZ` |
+| Függés | A `setup` lépés után, és a generált broker indulása után indul |
+
+Az előkészítő lépés első indulásra (ha a `flows.json` még nincs meg) egy kezdő folyamot ír: egy „IoT szimulátor broker” nevű `mqtt-broker` konfigurációs csomópontot `${MQTT_HOST}` és `${MQTT_PORT}` hivatkozással, valamint egy példafolyamot (`mqtt in` a `#` topicra → `debug`). A meglévő folyamokat nem írja felül, így a Node-RED-ben végzett munka megmarad; a broker később a Node-RED felületén módosítható.
+
+A felhasználónév és a jelszó a Node-RED-ben külön, titkosított hitelesítőadat-fájlban (`flows_cred.json`) él, és a források ellentmondanak abban, hogy a `${...}` környezeti változós hivatkozást ott is feloldja-e. A megvalósításkor valódi Node-RED-del dől el, melyik út működik, a következő sorrendben:
+
+1. A hitelesítő adatok mezőiben `${MQTT_USERNAME}` és `${MQTT_PASSWORD}` hivatkozás: így a jelszó csak a compose-ban van.
+2. Ha ez nem működik: az előkészítő lépés titkosítatlan `flows_cred.json`-t ír a változók értékével, és a `settings.js`-ben `credentialSecret: false` áll. Ekkor a jelszó a `node-red` mappában is olvasható, amit a felület figyelmeztetése jelez.
+
+A kiválasztott megoldást és az ellenőrzés eredményét ez a szakasz rögzíti majd.
+
+**Tesztelés.** Egységtesztek: a három szolgáltatás-kombináció (Mosquitto igen/nem × Node-RED igen/nem) és a jelszavas védelem szerkezete, a `$` escape, valamint hogy a jelszó a válaszon kívül sehol (napló, adatbázis) nem jelenik meg. Kézi ellenőrzés: valódi Mosquitto (a `mosquitto_passwd` által készített fájllal) elutasítja a névtelen és elfogadja a megadott felhasználót; valódi Node-RED a kezdő folyammal elindul, kapcsolódik a brokerhez, és megjeleníti a szimulátor üzeneteit.
+
 ### Tesztelés
 
 | Szint | Mit ellenőriz | Eszköz |
@@ -726,7 +774,7 @@ A protokolltesztekhez szükséges referenciaforgalmat egy valódi Plus 1PM, egy 
 4. **Mérési modell.** Fogyasztásmérés Shelly eszközön, percenkénti `aenergy`, mérővezérlő a felületen.
 5. **Add-on.** `temperature:<id>` komponensek, `Temperature.GetStatus`, hőmérővezérlő.
 6. **Tasmota.** `POWER`, `STATE`, `SENSOR`, `STATUS`, `TelePeriod`, több relé, DS18B20 hőmérők, discovery.
-7. **Kiegészítők.** Üzenetnapló, JSON import és export, kiesés szimulációja, `toggle_after`, szenzorhiba, Home Assistant konfiguráció és docker-compose generálása.
+7. **Kiegészítők.** Üzenetnapló, JSON import és export, kiesés szimulációja, `toggle_after`, szenzorhiba, Home Assistant konfiguráció és docker-compose generálása, a compose beállításai (Mosquitto jelszavas védelemmel vagy külső broker, Node-RED).
 8. **Lezárás.** Protokolltesztek valós forgalom alapján, végponti próba, README.
 
 ## Verziókezelés és commit-szabályok
