@@ -412,6 +412,10 @@ export const HOMEASSISTANT_CONFIG_FILE = 'iot_simulator.yaml';
  * a compose ezt a mappát csatolja a Home Assistant csomagkönyvtárának.
  */
 export const HOMEASSISTANT_PACKAGES_DIR = 'homeassistant/packages';
+/** A Home Assistant /config mappája a docker-compose.yml mellett (configuration.yaml, .storage, adatbázis). */
+export const HOMEASSISTANT_DATA_DIR = 'homeassistant';
+/** A Mosquitto konfigurációja és adatai a docker-compose.yml mellett. */
+export const MOSQUITTO_DATA_DIR = 'mosquitto';
 export const HOMEASSISTANT_CONFIG_PATH = `${HOMEASSISTANT_PACKAGES_DIR}/${HOMEASSISTANT_CONFIG_FILE}`;
 
 /** A GET /api/homeassistant/config válasza. */
