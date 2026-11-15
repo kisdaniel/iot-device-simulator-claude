@@ -64,9 +64,7 @@ describe('Home Assistant konfiguráció (e2e)', () => {
     expect(doc.mqtt.switch.map((s: { name: string | null }) => s.name)).toEqual(
       [null, 'Relé 1', 'Relé 2'],
     );
-    expect(all.body.compose).toContain(
-      './homeassistant/packages:/config/packages:ro',
-    );
+    expect(all.body.compose).toContain('./homeassistant:/config');
 
     const withDiscovered = await request(server)
       .get('/api/homeassistant/config?includeDiscovered=true')
