@@ -1,10 +1,21 @@
 import {
   HOMEASSISTANT_CONFIG_FILE,
+  type ComposeOptions,
+  type HomeAssistantComposeResult,
   type HomeAssistantConfigResult,
 } from '@iot-sim/shared';
-import { Controller, Get, Header, Query } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Header,
+  HttpCode,
+  Post,
+  Query,
+} from '@nestjs/common';
 import { ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { SimulationService } from '../simulation/simulation.service.js';
+import { ComposeOptionsDto } from './compose-options.dto.js';
 import { buildHomeAssistantCompose } from './ha-compose.js';
 import { buildHomeAssistantConfig } from './ha-config.js';
 
@@ -59,10 +70,34 @@ export class HomeAssistantController {
   @Header('Content-Disposition', 'attachment; filename="docker-compose.yml"')
   @ApiOperation({
     summary:
-      'docker-compose.yml Home Assistanttel és Mosquittóval; a generált konfigurációt csomagként tölti be',
+      'docker-compose.yml az alapbeállításokkal (Mosquitto jelszó nélkül, Node-RED és szimulátor nélkül)',
   })
   composeFile(): string {
-    return compose();
+    return compose().compose;
+  }
+
+  /** A jelszó a törzsben jön, és a válasz sem kerülhet gyorsítótárba. */
+  @Post('compose')
+  @HttpCode(200)
+  @Header('Cache-Control', 'no-store')
+  @ApiOperation({
+    summary:
+      'docker-compose.yml a megadott beállításokkal (Mosquitto, jelszavas védelem, külső broker, Node-RED, szimulátor)',
+  })
+  composeWithOptions(
+    @Body() options: ComposeOptionsDto,
+  ): HomeAssistantComposeResult {
+    return compose(options);
+  }
+
+  @Post('docker-compose.yml')
+  @HttpCode(200)
+  @Header('Cache-Control', 'no-store')
+  @Header('Content-Type', 'text/yaml; charset=utf-8')
+  @Header('Content-Disposition', 'attachment; filename="docker-compose.yml"')
+  @ApiOperation({ summary: 'Ugyanez letölthető fájlként' })
+  composeFileWithOptions(@Body() options: ComposeOptionsDto): string {
+    return compose(options).compose;
   }
 
   private build(
@@ -78,14 +113,15 @@ export class HomeAssistantController {
       ...buildHomeAssistantConfig(devices, {
         includeDiscovered: flag(includeDiscovered),
       }),
-      compose: compose(),
+      compose: compose().compose,
     };
   }
 }
 
 /** A compose a szerver időzónáját kapja alapértéknek (a TZ változóval felülírható). */
-function compose(): string {
+function compose(options?: ComposeOptions): HomeAssistantComposeResult {
   return buildHomeAssistantCompose({
     timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+    options,
   });
 }

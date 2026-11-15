@@ -89,6 +89,81 @@ describe('Home Assistant konfiguráció (e2e)', () => {
     );
   });
 
+  it('POST compose: a beállítások szerint generál, a választ nem gyorsítótárazza, és hibás beállításra 400', async () => {
+    const options = {
+      mosquitto: {
+        enabled: true,
+        auth: { username: 'iot', password: 'titok$1' },
+      },
+      broker: null,
+      nodeRed: { enabled: true },
+      simulator: {
+        enabled: true,
+        image: 'iot-device-simulator:latest',
+        seedDevices: false,
+      },
+    };
+    const res = await request(app.getHttpServer())
+      .post('/api/homeassistant/compose')
+      .send(options)
+      .expect(200);
+    expect(res.headers['cache-control']).toBe('no-store');
+    expect(Object.keys(parse(res.body.compose).services)).toEqual([
+      'setup',
+      'mosquitto-setup',
+      'mosquitto',
+      'homeassistant',
+      'nodered',
+      'simulator',
+    ]);
+    expect(res.body.compose).toContain('MQTT_PASSWORD: titok$$1');
+    expect(res.body.warnings.length).toBeGreaterThan(0);
+
+    const file = await request(app.getHttpServer())
+      .post('/api/homeassistant/docker-compose.yml')
+      .send(options)
+      .expect(200);
+    expect(file.headers['content-disposition']).toContain('docker-compose.yml');
+    expect(file.headers['cache-control']).toBe('no-store');
+    expect(file.text).toBe(
+      res.body.compose.replace(
+        /Generálva: \S+/,
+        file.text.match(/Generálva: \S+/)![0],
+      ),
+    );
+
+    // A szimulátor brokerbeállítása nem változik a generálástól.
+    expect(
+      (await request(app.getHttpServer()).get('/api/broker').expect(200)).text,
+    ).not.toContain('titok');
+
+    const missingPassword = await request(app.getHttpServer())
+      .post('/api/homeassistant/compose')
+      .send({
+        ...options,
+        mosquitto: { enabled: true, auth: { username: 'iot', password: '' } },
+      })
+      .expect(400);
+    expect(JSON.stringify(missingPassword.body)).toContain('a jelszó kötelező');
+    const noBroker = await request(app.getHttpServer())
+      .post('/api/homeassistant/compose')
+      .send({ ...options, mosquitto: { enabled: false } })
+      .expect(400);
+    expect(JSON.stringify(noBroker.body)).toContain(
+      'külső broker megadása kötelező',
+    );
+    const badImage = await request(app.getHttpServer())
+      .post('/api/homeassistant/compose')
+      .send({
+        ...options,
+        simulator: { enabled: true, image: 'rossz kép', seedDevices: false },
+      })
+      .expect(400);
+    expect(JSON.stringify(badImage.body)).toContain(
+      'érvényes Docker képhivatkozás',
+    );
+  });
+
   it('a docker-compose.yml letölthető', async () => {
     const res = await request(app.getHttpServer())
       .get('/api/homeassistant/docker-compose.yml')
