@@ -720,12 +720,17 @@ interface ComposeOptions {
   /** Csak ha nincs generált Mosquitto: a használandó broker. */
   broker?: { host: string; port: number; username?: string | null; password?: string | null };
   nodeRed: { enabled: boolean };            // alapból false
+  simulator: {
+    enabled: boolean;                       // alapból false
+    image: string;                          // alapból 'iot-device-simulator:latest'
+    seedDevices: boolean;                   // első induláskor a mostani eszközlista (CONFIG_FILE)
+  };
 }
 ```
 
 | Szabály | Részletek |
 | --- | --- |
-| Validáció | Felhasználónév: 1–64 karakter, szóköz és `:` nélkül (a Mosquitto jelszófájl `felhasználó:hash` sorokból áll). Jelszó: 1–128 karakter. Külső broker: a host kötelező, a port 1–65535. Hibára 400 mezőszintű hibalistával (`mosquitto.auth.password`, `broker.host`). |
+| Validáció | Felhasználónév: 1–64 karakter, szóköz és `:` nélkül (a Mosquitto jelszófájl `felhasználó:hash` sorokból áll). Jelszó: 1–128 karakter. Külső broker: a host kötelező, a port 1–65535. Szimulátor képe: érvényes Docker képhivatkozás (`név[:címke]` vagy `regisztráció/név[:címke]`), legfeljebb 255 karakter. Hibára 400 mezőszintű hibalistával (`mosquitto.auth.password`, `broker.host`). |
 | Előtöltés | A felület a külső broker mezőit a szimulátor brokerbeállításából tölti (`GET /api/broker`), jelszó nélkül; a jelszót újra be kell írni. |
 | Titok kezelése | A backend a jelszót csak a válasz előállításához használja, nem tárolja és nem naplózza; a válasz a `Cache-Control: no-store` fejlécet kapja. A felület a jelszót csak memóriában tartja, a böngésző tárolójába nem írja. A compose-ban a jelszó környezeti változóként szerepel; a generátor a `$` jelet `$$`-ra cseréli, és a szkriptek a jelszót változóból olvassák, nem a parancssorba írva. |
 | Figyelmeztetések | A válasz `warnings` listája jelzi: a jelszó olvasható formában van a fájlban; jelszavas védelemnél a szimulátort és a Home Assistant integrációját is ezzel a felhasználóval kell beállítani; külső brokernél a broker elérhetőségét a felhasználónak kell biztosítania. |
@@ -753,7 +758,21 @@ A felhasználónév és a jelszó a Node-RED-ben külön, titkosított hitelesí
 
 A kiválasztott megoldást és az ellenőrzés eredményét ez a szakasz rögzíti majd.
 
-**Tesztelés.** Egységtesztek: a három szolgáltatás-kombináció (Mosquitto igen/nem × Node-RED igen/nem) és a jelszavas védelem szerkezete, a `$` escape, valamint hogy a jelszó a válaszon kívül sehol (napló, adatbázis) nem jelenik meg. Kézi ellenőrzés: valódi Mosquitto (a `mosquitto_passwd` által készített fájllal) elutasítja a névtelen és elfogadja a megadott felhasználót; valódi Node-RED a kezdő folyammal elindul, kapcsolódik a brokerhez, és megjeleníti a szimulátor üzeneteit.
+**Szimulátor a compose-ban (F-81, F-82).** Új, választható szolgáltatás:
+
+| Elem | Érték |
+| --- | --- |
+| Kép | A megadott képnév (alapból `iot-device-simulator:latest`), `pull_policy: never`: a compose nem építi és nem tölti le. Ha a kép hiányzik, a `docker compose up` hibával áll meg; a compose fejléce megadja az építés parancsát (`docker build -t iot-device-simulator:latest .` a szimulátor forrásmappájában) |
+| Port | `${SIMULATOR_PORT:-3000}:3000` |
+| Adatok | `./simulator` → `/data` (SQLite adatbázis); a konténer a `node` felhasználóval (uid 1000) fut, ezért az előkészítő lépés a mappát `1000:1000` tulajdonba adja |
+| Broker | `MQTT_URL` a compose brokerére: generált Mosquittónál `mqtt://mosquitto:1883`, jelszavas védelemnél `MQTT_USERNAME` és `MQTT_PASSWORD` is; külső brokernél a megadott cím (és `extra_hosts: host.docker.internal:host-gateway`). Mivel a broker környezeti változóból jön, a szimulátor Beállítások oldalán csak olvasható |
+| Kezdő eszközlista | `seedDevices` esetén `CONFIG_FILE=/data/devices.json` és `CONFIG_IMPORT_MODE=seed`: első induláskor (üres adatbázisnál) betölti a fájlt, később nem. A felület megmondja, hogy a Beállítások oldal exportját `simulator/devices.json` néven kell menteni; a fájl hiányában a szimulátor nem indul el, ezt a compose fejléce jelzi |
+| Függés | A `setup` lépés után, és a generált broker indulása után indul |
+| Egyéb | `TZ`, `LOG_LEVEL=info`; a kép saját egészség-ellenőrzése (`HEALTHCHECK`) érvényes |
+
+A válasz `warnings` listája jelzi, hogy ha ugyanazon a gépen a szimulátor saját `docker-compose.yml`-je is fut, a 3000-es és az 1883-as port ütközik (`SIMULATOR_PORT`, ill. `MQTT_PORT` változóval feloldható). A szimulátor saját `docker-compose.yml`-je a `build: .` mellé `image: iot-device-simulator:latest` sort kap, így a `docker compose build` ezen a néven építi a képet (F-82).
+
+**Tesztelés.** Egységtesztek: a szolgáltatás-kombinációk (Mosquitto, Node-RED és szimulátor igen/nem) és a jelszavas védelem szerkezete, a szimulátor brokercíme és kezdő eszközlistája, a `$` escape, valamint hogy a jelszó a válaszon kívül sehol (napló, adatbázis) nem jelenik meg. Kézi ellenőrzés: valódi Mosquitto (a `mosquitto_passwd` által készített fájllal) elutasítja a névtelen és elfogadja a megadott felhasználót; valódi Node-RED a kezdő folyammal elindul, kapcsolódik a brokerhez, és megjeleníti a szimulátor üzeneteit; a szimulátor a megadott képpel és a kezdő eszközlistával elindul, és a compose brokerére kapcsolódik.
 
 ### Tesztelés
 
@@ -774,7 +793,7 @@ A protokolltesztekhez szükséges referenciaforgalmat egy valódi Plus 1PM, egy 
 4. **Mérési modell.** Fogyasztásmérés Shelly eszközön, percenkénti `aenergy`, mérővezérlő a felületen.
 5. **Add-on.** `temperature:<id>` komponensek, `Temperature.GetStatus`, hőmérővezérlő.
 6. **Tasmota.** `POWER`, `STATE`, `SENSOR`, `STATUS`, `TelePeriod`, több relé, DS18B20 hőmérők, discovery.
-7. **Kiegészítők.** Üzenetnapló, JSON import és export, kiesés szimulációja, `toggle_after`, szenzorhiba, Home Assistant konfiguráció és docker-compose generálása, a compose beállításai (Mosquitto jelszavas védelemmel vagy külső broker, Node-RED).
+7. **Kiegészítők.** Üzenetnapló, JSON import és export, kiesés szimulációja, `toggle_after`, szenzorhiba, Home Assistant konfiguráció és docker-compose generálása, a compose beállításai (Mosquitto jelszavas védelemmel vagy külső broker, Node-RED, a szimulátor maga).
 8. **Lezárás.** Protokolltesztek valós forgalom alapján, végponti próba, README.
 
 ## Verziókezelés és commit-szabályok
