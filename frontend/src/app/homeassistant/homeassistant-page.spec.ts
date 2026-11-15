@@ -85,6 +85,9 @@ describe('HomeAssistantPage', () => {
       'homeassistant/packages/iot_simulator.yaml',
     );
     expect(link.getAttribute('href')).toBe('/api/homeassistant/docker-compose.yml');
+    expect(element.querySelector('[data-testid="data-hint"]')?.textContent).toContain(
+      'homeassistant/',
+    );
     expect(link.classList).not.toContain('disabled');
   });
 });
