@@ -4,7 +4,8 @@
 <p class="text-secondary mb-4">
   MQTT-konfiguráció a kiválasztott eszközökből: a kapcsolók és a mért értékek entitásként jelennek
   meg a Home Assistantben. Mellé egy <code>docker-compose.yml</code> is készül, amely Home
-  Assistantet és Mosquitto brokert indít, és betölti ezt a konfigurációt.
+  Assistantet indít, és betölti ezt a konfigurációt; Mosquitto broker, Node-RED és maga a szimulátor
+  is kérhető bele.
 </p>
 
 @if (!store.loaded()) {
@@ -78,11 +79,14 @@
       @if (error(); as message) {
         <div class="alert alert-danger" role="alert">{{ message }}</div>
       }
+      @if (view() === 'compose' && composeError(); as message) {
+        <div class="alert alert-danger" role="alert">{{ message }}</div>
+      }
       @if (result(); as r) {
-        @if (r.warnings.length > 0) {
-          <div class="alert alert-warning small" role="status">
+        @if (warnings().length > 0) {
+          <div class="alert alert-warning small" role="status" data-testid="warnings">
             <ul class="mb-0 ps-3">
-              @for (warning of r.warnings; track $index) {
+              @for (warning of warnings(); track $index) {
                 <li>{{ warning }}</li>
               }
             </ul>
@@ -115,6 +119,9 @@
               </li>
             </ul>
           </div>
+          <div class="card-body border-bottom" [hidden]="view() !== 'compose'">
+            <app-compose-options-form (optionsChange)="composeOptions.set($event)" />
+          </div>
           <div class="card-body border-bottom d-flex flex-wrap align-items-start gap-2 small">
             <div class="me-auto" data-testid="save-hint">
               @if (view() === 'config') {
@@ -131,13 +138,13 @@
                 </div>
                 <div class="text-secondary">
                   Indítás: <code>docker compose up -d</code>, majd a Home Assistantben egyszer vedd
-                  fel az MQTT-integrációt (broker: <code>mosquitto</code>, port: 1883). A szimulátor
-                  is ehhez a brokerhez kapcsolódjon.
+                  fel az MQTT-integrációt; a pontos adatokat a fájl fejléce írja le.
                 </div>
                 <div class="text-secondary" data-testid="data-hint">
-                  Minden adat a mappában marad, a konténerek újralétrehozása után is: a Home
-                  Assistant konfigurációja, beállításai és előzményei a
-                  <code>homeassistant/</code>, a broker adatai a <code>mosquitto/</code> alatt.
+                  Minden adat a mappában marad, a konténerek újralétrehozása után is:
+                  @for (folder of dataFolders(); track folder; let last = $last) {
+                    <code>{{ folder }}</code>{{ last ? '.' : ',' }}
+                  }
                 </div>
               }
             </div>
@@ -155,14 +162,27 @@
               ></i>
               {{ copied() ? 'Másolva' : 'Másolás' }}
             </button>
-            <a
-              class="btn btn-sm btn-primary"
-              [href]="downloadUrl()"
-              [class.disabled]="!canExport()"
-              download
-            >
-              <i class="bi bi-download" aria-hidden="true"></i> Letöltés
-            </a>
+            @if (view() === 'compose') {
+              <button
+                type="button"
+                class="btn btn-sm btn-primary"
+                data-testid="download"
+                [disabled]="!canExport()"
+                (click)="downloadCompose()"
+              >
+                <i class="bi bi-download" aria-hidden="true"></i> Letöltés
+              </button>
+            } @else {
+              <a
+                class="btn btn-sm btn-primary"
+                data-testid="download"
+                [href]="downloadUrl()"
+                [class.disabled]="!canExport()"
+                download
+              >
+                <i class="bi bi-download" aria-hidden="true"></i> Letöltés
+              </a>
+            }
           </div>
           @if (view() === 'config' && r.deviceCount === 0) {
             <p class="card-body text-secondary mb-0">Válassz ki legalább egy eszközt.</p>

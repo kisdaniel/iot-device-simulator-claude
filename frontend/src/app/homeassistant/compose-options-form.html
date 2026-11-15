@@ -1,0 +1,185 @@
+<fieldset class="small" data-testid="compose-options">
+  <legend class="fs-6 fw-semibold mb-2">A compose tartalma</legend>
+
+  <div class="form-check form-switch mb-1">
+    <input
+      id="composeMosquitto"
+      class="form-check-input"
+      type="checkbox"
+      role="switch"
+      [checked]="state().mosquitto"
+      (change)="setFlag('mosquitto', $event)"
+    />
+    <label for="composeMosquitto" class="form-check-label">Mosquitto MQTT-broker</label>
+  </div>
+
+  @if (state().mosquitto) {
+    <div class="ms-4 mb-2">
+      <div class="form-check form-switch mb-1">
+        <input
+          id="composeAuth"
+          class="form-check-input"
+          type="checkbox"
+          role="switch"
+          [checked]="state().auth"
+          (change)="setFlag('auth', $event)"
+        />
+        <label for="composeAuth" class="form-check-label">Jelszavas védelem</label>
+      </div>
+      @if (state().auth) {
+        <div class="row g-2">
+          <div class="col-sm-6">
+            <label for="composeAuthUsername" class="form-label mb-0">Felhasználónév</label>
+            <input
+              id="composeAuthUsername"
+              class="form-control form-control-sm"
+              autocomplete="off"
+              [class.is-invalid]="errors().authUsername"
+              [value]="state().authUsername"
+              (input)="setText('authUsername', $event)"
+            />
+            <div class="invalid-feedback">{{ errors().authUsername }}</div>
+          </div>
+          <div class="col-sm-6">
+            <label for="composeAuthPassword" class="form-label mb-0">Jelszó</label>
+            <input
+              id="composeAuthPassword"
+              class="form-control form-control-sm"
+              type="password"
+              autocomplete="new-password"
+              [class.is-invalid]="errors().authPassword"
+              [value]="state().authPassword"
+              (input)="setText('authPassword', $event)"
+            />
+            <div class="invalid-feedback">{{ errors().authPassword }}</div>
+          </div>
+        </div>
+        <div class="form-text">
+          A broker csak ezt a felhasználót engedi be; a jelszó kódolva kerül a broker
+          jelszófájljába, de a docker-compose.yml-ben olvasható.
+        </div>
+      }
+    </div>
+  } @else {
+    <div class="ms-4 mb-2" data-testid="external-broker">
+      <div class="form-text mt-0 mb-1">
+        A compose ezt a brokert használja. A gépen futó brokert a konténerek a
+        <code>host.docker.internal</code> néven érik el.
+      </div>
+      <div class="row g-2">
+        <div class="col-sm-8">
+          <label for="composeBrokerHost" class="form-label mb-0">Broker címe</label>
+          <input
+            id="composeBrokerHost"
+            class="form-control form-control-sm"
+            [class.is-invalid]="errors().brokerHost"
+            [value]="state().brokerHost"
+            (input)="setText('brokerHost', $event)"
+          />
+          <div class="invalid-feedback">{{ errors().brokerHost }}</div>
+        </div>
+        <div class="col-sm-4">
+          <label for="composeBrokerPort" class="form-label mb-0">Port</label>
+          <input
+            id="composeBrokerPort"
+            class="form-control form-control-sm"
+            type="number"
+            min="1"
+            max="65535"
+            [class.is-invalid]="errors().brokerPort"
+            [value]="state().brokerPort ?? ''"
+            (input)="setPort($event)"
+          />
+          <div class="invalid-feedback">{{ errors().brokerPort }}</div>
+        </div>
+        <div class="col-sm-6">
+          <label for="composeBrokerUsername" class="form-label mb-0"
+            >Felhasználónév (opcionális)</label
+          >
+          <input
+            id="composeBrokerUsername"
+            class="form-control form-control-sm"
+            autocomplete="off"
+            [class.is-invalid]="errors().brokerUsername"
+            [value]="state().brokerUsername"
+            (input)="setText('brokerUsername', $event)"
+          />
+          <div class="invalid-feedback">{{ errors().brokerUsername }}</div>
+        </div>
+        <div class="col-sm-6">
+          <label for="composeBrokerPassword" class="form-label mb-0">Jelszó (opcionális)</label>
+          <input
+            id="composeBrokerPassword"
+            class="form-control form-control-sm"
+            type="password"
+            autocomplete="new-password"
+            [class.is-invalid]="errors().brokerPassword"
+            [value]="state().brokerPassword"
+            (input)="setText('brokerPassword', $event)"
+          />
+          <div class="invalid-feedback">{{ errors().brokerPassword }}</div>
+        </div>
+      </div>
+    </div>
+  }
+
+  <div class="form-check form-switch mb-1">
+    <input
+      id="composeNodeRed"
+      class="form-check-input"
+      type="checkbox"
+      role="switch"
+      [checked]="state().nodeRed"
+      (change)="setFlag('nodeRed', $event)"
+    />
+    <label for="composeNodeRed" class="form-check-label"
+      >Node-RED, a brokerhez előre beállítva (<code>http://localhost:1880</code>)</label
+    >
+  </div>
+
+  <div class="form-check form-switch mb-1">
+    <input
+      id="composeSimulator"
+      class="form-check-input"
+      type="checkbox"
+      role="switch"
+      [checked]="state().simulator"
+      (change)="setFlag('simulator', $event)"
+    />
+    <label for="composeSimulator" class="form-check-label"
+      >Maga a szimulátor is (<code>http://localhost:3000</code>)</label
+    >
+  </div>
+  @if (state().simulator) {
+    <div class="ms-4" data-testid="simulator-options">
+      <label for="composeSimulatorImage" class="form-label mb-0">A szimulátor képe</label>
+      <input
+        id="composeSimulatorImage"
+        class="form-control form-control-sm"
+        [class.is-invalid]="errors().simulatorImage"
+        [value]="state().simulatorImage"
+        (input)="setText('simulatorImage', $event)"
+      />
+      <div class="invalid-feedback">{{ errors().simulatorImage }}</div>
+      <div class="form-text mt-0">
+        A compose nem építi és nem tölti le: a képnek a gépen kell lennie (<code
+          >docker build -t {{ state().simulatorImage || 'iot-device-simulator:latest' }} .</code
+        >
+        a szimulátor forrásmappájában).
+      </div>
+      <div class="form-check mt-1">
+        <input
+          id="composeSeedDevices"
+          class="form-check-input"
+          type="checkbox"
+          [checked]="state().seedDevices"
+          (change)="setFlag('seedDevices', $event)"
+        />
+        <label for="composeSeedDevices" class="form-check-label">
+          Első induláskor a mostani eszközlistával: mentsd a Beállítások oldal exportját ide:
+          <code>{{ seedPath }}</code>
+        </label>
+      </div>
+    </div>
+  }
+</fieldset>
